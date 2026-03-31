@@ -1,7 +1,19 @@
 spec_version: 1
-name: triage_env
+name: criticalops-triage-env
+
 type: space
 runtime: fastapi
 app: server.app:app
 port: 8000
 
+description: >
+  A real-world OpenEnv environment simulating combined medical and military triage scenarios.
+  Agents must prioritize patients, allocate limited resources, and make high-stakes decisions
+  to maximize survival and health outcomes.
+
+tags:
+  - openenv
+  - triage
+  - healthcare
+  - military
+  - decision-making
