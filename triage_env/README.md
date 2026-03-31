@@ -11,9 +11,72 @@ tags:
   - openenv
 ---
 
-# Triage Env Environment
+# CriticalOps Triage Environment
 
-A simple test environment that echoes back messages. Perfect for testing the env APIs as well as demonstrating environment usage patterns.
+A real-world triage simulation environment combining both medical and military emergency response scenarios.
+
+In this environment, an AI agent must make critical decisions under pressure using limited resources. The agent is responsible for prioritizing patients based on severity, allocating resources like medics and ventilators, and deciding when to act or wait.
+
+The objective is to maximize survival rates and overall health outcomes while efficiently managing constrained resources in high-stakes situations.
+
+
+## Action Space
+
+The agent can take the following actions at each step:
+
+- `treat` → Provide medical treatment to a selected patient
+- `allocate_ventilator` → Assign a ventilator to a critical patient
+- `wait` → Take no action and allow time to pass
+
+Each action includes a `patient_id` indicating the target patient (if applicable).
+
+These actions simulate real-world decision-making under constrained medical and operational conditions.
+
+
+## Observation Space
+
+At each step, the agent receives an observation containing:
+
+- `patients` → A list of current patients in the scenario
+- `resources` → Available medical resources such as medics and ventilators
+- `step_count` → Current timestep in the episode
+- `message` → Optional environment feedback message
+
+Each patient includes information such as:
+
+- `id`
+- `severity` (`mild`, `moderate`, `severe`, `critical`)
+- `health` (0 to 100)
+- `waiting_time`
+- `alive`
+- `ventilated`
+
+This observation design allows the agent to make decisions based on urgency, patient condition, and limited operational resources.
+
+
+## Reward Function
+
+The reward is designed to reflect the quality of decisions made by the agent over time.
+
+- Positive reward for improving patient health
+- Higher reward for treating severe or critical patients effectively
+- Reward for successfully allocating ventilators to critical patients
+- Penalty for inaction when patients require urgent care
+- Penalty for poor decisions that lead to health deterioration or death
+- Small penalty for inefficient use of limited resources
+
+The reward is not binary — it provides continuous feedback throughout the episode to guide better decision-making.
+
+
+## Termination
+
+An episode ends when one of the following conditions is met:
+
+- The maximum number of steps is reached
+- All patients are no longer in a treatable state (e.g., stabilized or deceased)
+- No meaningful actions remain for the agent
+
+This ensures that each episode has a clear boundary while reflecting realistic operational constraints.
 
 ## Quick Start
 
@@ -119,19 +182,30 @@ The deployed space includes:
 ## Environment Details
 
 ### Action
-**TriageAction**: Contains a single field
-- `message` (str) - The message to echo back
+The agent selects one of the following actions:
+- `treat` → Provide treatment to a selected patient
+- `allocate_ventilator` → Assign ventilator to a critical patient
+- `wait` → No action
+
+Each action includes a `patient_id`.
+
+---
 
 ### Observation
-**TriageObservation**: Contains the echo response and metadata
-- `echoed_message` (str) - The message echoed back
-- `message_length` (int) - Length of the message
-- `reward` (float) - Reward based on message length (length × 0.1)
-- `done` (bool) - Always False for echo environment
-- `metadata` (dict) - Additional info like step count
+The agent receives:
+- List of patients (with severity, health, status)
+- Available resources (medics, ventilators)
+- Step count
+- Optional message
+
+---
 
 ### Reward
-The reward is calculated as: `message_length × 0.1`
+The reward is shaped based on:
+- Improvement in patient health
+- Successful treatment of critical cases
+- Efficient resource allocation
+- Penalties for inaction or harmful decisions
 - "Hi" → reward: 0.2
 - "Hello, World!" → reward: 1.3
 - Empty message → reward: 0.0
