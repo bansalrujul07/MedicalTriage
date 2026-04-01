@@ -8,14 +8,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Test / tooling cache
+# Pytest
 .pytest_cache/
-.mypy_cache/
-.ruff_cache/
+
+# Coverage / tooling
 .coverage
 htmlcov/
+.mypy_cache/
+.ruff_cache/
 
-# Environment variables
+# Environment files
 .env
 .env.*
 
@@ -23,11 +25,11 @@ htmlcov/
 .vscode/
 .idea/
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
-# Build
+# Build artifacts
 build/
 dist/
 *.egg-info/
