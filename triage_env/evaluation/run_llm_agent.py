@@ -2,8 +2,9 @@ from triage_env.server.triage_env_environment import TriageEnvironment
 from triage_env.agents.llm_agent import LLMAgent
 
 
-def mock_llm(prompt: str) -> str:
+def mock_llm(system_prompt: str, user_prompt: str) -> str:
     # temporary placeholder until real API integration
+    _ = system_prompt, user_prompt
     return '{"action_type": "treat", "patient_id": 0}'
 
 

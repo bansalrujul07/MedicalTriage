@@ -1,0 +1,6 @@
+agent_name,avg_total_reward,critical_survival_rate,success_rate,ventilator_utilization,invalid_action_count,meets_targets,failure_modes
+RandomAgent,85.7155,0.0000,0.0000,0.0000,0,False,critical_survival_too_low;success_rate_too_low;reward_not_above_rule_based;ventilator_use_too_low
+RuleBasedAgent,154.4613,0.0000,0.0000,0.0000,0,False,critical_survival_too_low;success_rate_too_low;reward_not_above_rule_based;ventilator_use_too_low
+LLMAgent,253.3744,1.0000,1.0000,1.0000,0,False,critical_survival_above_preferred_band;ventilator_overuse
+TrainedQAgent,195.3954,0.5000,0.4000,0.5903,0,False,critical_survival_too_low;success_rate_too_low
+RLAgent,214.2388,0.8333,0.0000,0.2853,0,False,critical_survival_too_low;success_rate_too_low

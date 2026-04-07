@@ -1,20 +1,143 @@
-try:
-    from triage_env.agents.base_agent import BaseAgent
-    from triage_env.agents.prompt_builder import observation_to_prompt
-    from triage_env.agents.action_parser import parse_llm_action
-    from triage_env.models import TriageAction, TriageObservation
-except ImportError:
-    from agents.base_agent import BaseAgent
-    from agents.prompt_builder import observation_to_prompt
-    from agents.action_parser import parse_llm_action
-    from models import TriageAction, TriageObservation
+import logging
+from typing import Callable
+
+from groq import Groq
+from openai import OpenAI
+
+from triage_env.agents.base_agent import BaseAgent
+from triage_env.agents.parser import parse_llm_action
+from triage_env.agents.prompt_builder import build_system_prompt, build_user_prompt
+from triage_env.config import LLMConfig, get_llm_config
+from triage_env.models import TriageAction, TriageObservation
+
+LOGGER = logging.getLogger(__name__)
 
 
 class LLMAgent(BaseAgent):
-    def __init__(self, llm_callable):
+    """
+    LLM-backed triage agent.
+
+    Works with:
+    - a mock callable passed from run_llm_agent.py
+    - or the default internal fallback
+    """
+
+    def __init__(
+        self,
+        llm_callable: Callable[[str, str], str] | None = None,
+        config: LLMConfig | None = None,
+    ):
+        self.config = config or get_llm_config()
         self.llm_callable = llm_callable
+        self._client: OpenAI | Groq | None = None
+        self._missing_key_warned = False
+
+        if self.llm_callable is None and self.config.api_key:
+            if self.config.provider == "groq":
+                LOGGER.info("Groq API key detected; initializing Groq client for model %s", self.config.model)
+                self._client = Groq(api_key=self.config.api_key, timeout=self.config.timeout_seconds)
+            else:  # openai
+                LOGGER.info("OpenAI API key detected; initializing LLM client for model %s", self.config.model)
+                self._client = OpenAI(api_key=self.config.api_key, timeout=self.config.timeout_seconds)
+        elif self.llm_callable is None:
+            LOGGER.warning("No API key and no custom llm_callable provided; LLMAgent will use fallback policy")
 
     def act(self, observation: TriageObservation) -> TriageAction:
-        prompt = observation_to_prompt(observation)
-        raw_output = self.llm_callable(prompt)
-        return parse_llm_action(raw_output)
+        system_prompt = build_system_prompt()
+        user_prompt = build_user_prompt(observation)
+        raw = self._query_llm(system_prompt, user_prompt)
+
+        if raw is None:
+            return self._safe_fallback_action(observation)
+
+        action = parse_llm_action(raw)
+        if not self._is_valid_action(observation, action):
+            LOGGER.warning("LLM action failed environment validation; falling back safely")
+            return self._safe_fallback_action(observation)
+
+        return action
+
+    def _query_llm(self, system_prompt: str, user_prompt: str) -> str | None:
+        if self.llm_callable is not None:
+            try:
+                return self.llm_callable(system_prompt, user_prompt)
+            except Exception as exc:  # pragma: no cover
+                LOGGER.warning("Custom llm_callable failed: %s", exc)
+                return None
+
+        if self._client is None:
+            if not self._missing_key_warned:
+                LOGGER.warning("%s API key missing; LLMAgent using fallback policy", self.config.provider.upper())
+                self._missing_key_warned = True
+            return None
+
+        try:
+            if self.config.provider == "groq":
+                LOGGER.info("Making Groq API call to %s", self.config.model)
+                response = self._client.chat.completions.create(
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                )
+            else:  # openai
+                LOGGER.info("Making OpenAI API call to %s", self.config.model)
+                response = self._client.chat.completions.create(
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                )
+            
+            LOGGER.info("%s API call succeeded", self.config.provider.upper())
+            content = response.choices[0].message.content
+            return content or None
+        except Exception as exc:  # pragma: no cover
+            LOGGER.warning("%s request failed: %s", self.config.provider.upper(), exc)
+            return None
+
+    def _is_valid_action(self, observation: TriageObservation, action: TriageAction) -> bool:
+        alive_patients = {p.id: p for p in observation.patients if p.alive}
+
+        if action.action_type == "wait":
+            return action.patient_id == -1
+
+        target = alive_patients.get(action.patient_id)
+        if target is None:
+            return False
+
+        if action.action_type == "allocate_ventilator":
+            if observation.resources.ventilators_available <= 0:
+                return False
+            if target.ventilated:
+                return False
+
+        return True
+
+    def _safe_fallback_action(self, observation: TriageObservation) -> TriageAction:
+        alive_patients = [p for p in observation.patients if p.alive]
+        if not alive_patients:
+            return TriageAction(action_type="wait", patient_id=-1)
+
+        critical_unventilated = [
+            p
+            for p in alive_patients
+            if p.severity in ("critical", "severe") and not p.ventilated
+        ]
+        if critical_unventilated and observation.resources.ventilators_available > 0:
+            target = min(critical_unventilated, key=lambda p: p.health)
+            return TriageAction(action_type="allocate_ventilator", patient_id=target.id)
+
+        target = min(alive_patients, key=lambda p: p.health)
+        return TriageAction(action_type="treat", patient_id=target.id)
+
+
+
+
+

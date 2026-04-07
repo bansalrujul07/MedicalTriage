@@ -41,5 +41,21 @@ server = "triage_env.server.app:main"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["triage_env", "triage_env.server"]
-package-dir = { "triage_env" = ".", "triage_env.server" = "server" }
+packages = [
+    "triage_env",
+    "triage_env.agents",
+    "triage_env.evaluation",
+    "triage_env.training",
+    "triage_env.server",
+    "triage_env.tests",
+    "triage_env.scripts",
+]
+
+[tool.setuptools.package-dir]
+triage_env = "."
+"triage_env.agents" = "agents"
+"triage_env.evaluation" = "evaluation"
+"triage_env.training" = "training"
+"triage_env.server" = "server"
+"triage_env.tests" = "tests"
+"triage_env.scripts" = "scripts"

@@ -1,6 +1,7 @@
 import pytest
 
 from triage_env.server.triage_env_environment import TriageEnvironment
+from triage_env.tasks import TASK_CONFIGS
 from triage_env.models import TriageAction
 
 
@@ -16,7 +17,7 @@ def test_reset_initial_state(env):
 
     assert obs.step_count == 0
     assert obs.done is False
-    assert len(obs.patients) == 3
+    assert len(obs.patients) == TASK_CONFIGS[env.task_name].num_patients
     assert obs.resources.medics_available == 2
     assert obs.resources.ventilators_available == 1
     assert obs.metadata["total_reward"] == 0.0

@@ -1,27 +1,21 @@
-try:
-    from triage_env.server.triage_env_environment import TriageEnvironment
-    from triage_env.agents.random_agent import RandomAgent
-except ImportError:
-    from server.triage_env_environment import TriageEnvironment
-    from agents.random_agent import RandomAgent
+import argparse
+
+from triage_env.agents.random_agent import RandomAgent
+from triage_env.config import get_runtime_config
+from triage_env.evaluation.evaluator import run_single_episode
+from triage_env.server.triage_env_environment import TriageEnvironment
 
 
-def main():
-    env = TriageEnvironment(max_steps=20)
-    agent = RandomAgent()
+def main() -> None:
+    runtime = get_runtime_config()
+    parser = argparse.ArgumentParser(description="Run random agent")
+    parser.add_argument("--task", choices=["task1", "task2", "task3"], default=runtime.default_task)
+    args = parser.parse_args()
 
-    obs = env.reset()
-    print("Initial Observation:")
-    print(obs.model_dump())
-
-    while not obs.done:
-        action = agent.act(obs)
-        print("\nAction:", action.model_dump())
-        obs = env.step(action)
-        print("Observation:", obs.model_dump())
-
-    print("\nFinal State:")
-    print(env.state.model_dump())
+    env = TriageEnvironment(task=args.task)
+    metrics = run_single_episode(env, RandomAgent())
+    print("Random agent episode metrics:")
+    print(metrics)
 
 
 if __name__ == "__main__":

@@ -4,29 +4,34 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from server.triage_env_environment import TriageEnvironment
-from models import TriageAction
+from triage_env.models import TriageAction
+from triage_env.server.triage_env_environment import TriageEnvironment
 
-env = TriageEnvironment()
-obs = env.reset()
+__test__ = False
 
-print("RESET:")
-print(obs.model_dump())
 
-done = False
+def main() -> None:
+    env = TriageEnvironment(task="task2")
+    obs = env.reset()
 
-while not done:
-    alive = [p for p in obs.patients if p.alive]
-
-    if alive:
-        target = min(alive, key=lambda p: p.health)
-        action = TriageAction(action_type="treat", patient_id=target.id)
-    else:
-        action = TriageAction(action_type="wait", patient_id=-1)
-
-    obs = env.step(action)
+    print("RESET:")
     print(obs.model_dump())
-    done = obs.done
 
-print("FINAL STATE:")
-print(env.state.model_dump())
+    while not obs.done:
+        alive = [p for p in obs.patients if p.alive]
+
+        if alive:
+            target = min(alive, key=lambda p: p.health)
+            action = TriageAction(action_type="treat", patient_id=target.id)
+        else:
+            action = TriageAction(action_type="wait", patient_id=-1)
+
+        obs = env.step(action)
+        print(obs.model_dump())
+
+    print("FINAL STATE:")
+    print(env.state.model_dump())
+
+
+if __name__ == "__main__":
+    main()

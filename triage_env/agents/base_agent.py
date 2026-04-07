@@ -1,12 +1,26 @@
 from abc import ABC, abstractmethod
-
-try:
-    from triage_env.models import TriageAction, TriageObservation
-except ImportError:
-    from models import TriageAction, TriageObservation
+from typing import Any
 
 
 class BaseAgent(ABC):
+    """
+    Common interface for all triage agents.
+    Every agent should implement act(observation).
+    """
+
     @abstractmethod
-    def act(self, observation: TriageObservation) -> TriageAction:
+    def act(self, observation):
+        raise NotImplementedError
+
+    def reset(self):
+        """
+        Optional hook for agents that maintain episode-level memory.
+        """
         pass
+
+    @property
+    def name(self) -> str:
+        return self.__class__.__name__
+
+
+ObservationLike = Any

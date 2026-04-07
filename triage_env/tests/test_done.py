@@ -23,10 +23,7 @@
 
 #     assert done is True
 
-try:
-    from server.triage_env_environment import TriageEnvironment
-except ImportError:
-    from triage_env.server.triage_env_environment import TriageEnvironment
+from triage_env.server.triage_env_environment import TriageEnvironment
 
 
 def test_environment_eventually_finishes():

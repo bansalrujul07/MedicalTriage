@@ -28,12 +28,8 @@
 #     # Check done exists
 #     assert hasattr(next_obs, "done")
 
-try:
-    from server.triage_env_environment import TriageEnvironment
-    from models import TriageAction
-except ImportError:
-    from triage_env.server.triage_env_environment import TriageEnvironment
-    from triage_env.models import TriageAction
+from triage_env.server.triage_env_environment import TriageEnvironment
+from triage_env.models import TriageAction
 
 
 def test_step_increments_step_count():

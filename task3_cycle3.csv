@@ -1,0 +1,6 @@
+agent_name,avg_total_reward,critical_survival_rate,success_rate,ventilator_utilization,invalid_action_count,meets_targets,milestone_a,milestone_b,milestone_c,failure_modes,failure_reason_counts,checkpoint_status,checkpoint_warning
+RandomAgent,-391.4277,0.0000,0.0000,0.0000,0,False,False,False,False,critical_survival_too_low;success_rate_too_low;reward_not_above_rule_based;ventilator_use_too_low;failure_reasons=failed_both:30,failed_both:30,,
+RuleBasedAgent,-108.8233,0.0000,0.0000,0.0000,0,False,False,False,False,critical_survival_too_low;success_rate_too_low;reward_not_above_rule_based;ventilator_use_too_low;failure_reasons=failed_survival_threshold:30,failed_survival_threshold:30,,
+LLMAgent,-126.5029,0.0000,0.0000,0.4107,0,False,False,False,False,critical_survival_too_low;success_rate_too_low;reward_not_above_rule_based;failure_reasons=failed_both:30,failed_both:30,,
+TrainedQAgent,-177.7590,0.0167,0.0000,0.5387,0,False,False,False,False,critical_survival_too_low;success_rate_too_low;reward_not_above_rule_based;failure_reasons=failed_survival_threshold:24;failed_both:6,failed_both:6;failed_survival_threshold:24,fresh,
+RLAgent,-55.8486,0.0333,0.0000,0.5090,0,False,False,False,False,critical_survival_too_low;success_rate_too_low;failure_reasons=failed_survival_threshold:27;failed_both:3,failed_both:3;failed_survival_threshold:27,fresh,

@@ -1,14 +1,9 @@
-try:
-    from triage_env.server.triage_env_environment import TriageEnvironment
-    from triage_env.agents.random_agent import RandomAgent
-    from triage_env.training.trainer import train
-except ImportError:
-    from server.triage_env_environment import TriageEnvironment
-    from agents.random_agent import RandomAgent
-    from training.trainer import train
+from triage_env.agents.random_agent import RandomAgent
+from triage_env.server.triage_env_environment import TriageEnvironment
+from triage_env.training.trainer import train
 
 
-def main():
+def main() -> None:
     env = TriageEnvironment(max_steps=20)
     agent = RandomAgent()
 
