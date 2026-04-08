@@ -36,10 +36,11 @@ def _env_float(name: str, default: float) -> float:
 class LLMConfig:
     api_key: str | None
     model: str
+    base_url: str | None
     temperature: float
     max_tokens: int
     timeout_seconds: float
-    provider: str  # 'openai' or 'groq'
+    provider: str  # 'openai' (default) or compatibility modes
 
 
 @dataclass(frozen=True)
@@ -52,18 +53,23 @@ class RuntimeConfig:
 
 
 def get_llm_config() -> LLMConfig:
-    provider = os.getenv("TRIAGE_LLM_PROVIDER", "groq").lower()
-    
+    provider = os.getenv("TRIAGE_LLM_PROVIDER", "openai").lower()
+
     if provider == "openai":
         api_key = os.getenv("OPENAI_API_KEY")
         model = os.getenv("TRIAGE_LLM_MODEL", "gpt-4.1-mini")
-    else:  # groq
+        base_url = os.getenv("TRIAGE_LLM_BASE_URL")
+    else:
+        # Compatibility mode for OpenAI-compatible providers.
+        # Uses the OpenAI Python client with provider-specific base URL.
         api_key = os.getenv("GROQ_API_KEY")
         model = os.getenv("TRIAGE_LLM_MODEL", "llama-3.3-70b-versatile")
-    
+        base_url = os.getenv("TRIAGE_LLM_BASE_URL", "https://api.groq.com/openai/v1")
+
     return LLMConfig(
         api_key=api_key,
         model=model,
+        base_url=base_url,
         temperature=_env_float("TRIAGE_LLM_TEMPERATURE", 0.0),
         max_tokens=_env_int("TRIAGE_LLM_MAX_TOKENS", 200),
         timeout_seconds=_env_float("TRIAGE_LLM_TIMEOUT", 20.0),

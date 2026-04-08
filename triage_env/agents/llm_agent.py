@@ -1,7 +1,6 @@
 import logging
 from typing import Callable
 
-from groq import Groq
 from openai import OpenAI
 
 from triage_env.agents.base_agent import BaseAgent
@@ -29,16 +28,16 @@ class LLMAgent(BaseAgent):
     ):
         self.config = config or get_llm_config()
         self.llm_callable = llm_callable
-        self._client: OpenAI | Groq | None = None
+        self._client: OpenAI | None = None
         self._missing_key_warned = False
 
         if self.llm_callable is None and self.config.api_key:
-            if self.config.provider == "groq":
-                LOGGER.info("Groq API key detected; initializing Groq client for model %s", self.config.model)
-                self._client = Groq(api_key=self.config.api_key, timeout=self.config.timeout_seconds)
-            else:  # openai
-                LOGGER.info("OpenAI API key detected; initializing LLM client for model %s", self.config.model)
-                self._client = OpenAI(api_key=self.config.api_key, timeout=self.config.timeout_seconds)
+            LOGGER.info("Initializing OpenAI-compatible client for model %s", self.config.model)
+            self._client = OpenAI(
+                api_key=self.config.api_key,
+                timeout=self.config.timeout_seconds,
+                base_url=self.config.base_url,
+            )
         elif self.llm_callable is None:
             LOGGER.warning("No API key and no custom llm_callable provided; LLMAgent will use fallback policy")
 
@@ -72,29 +71,17 @@ class LLMAgent(BaseAgent):
             return None
 
         try:
-            if self.config.provider == "groq":
-                LOGGER.info("Making Groq API call to %s", self.config.model)
-                response = self._client.chat.completions.create(
-                    model=self.config.model,
-                    temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                )
-            else:  # openai
-                LOGGER.info("Making OpenAI API call to %s", self.config.model)
-                response = self._client.chat.completions.create(
-                    model=self.config.model,
-                    temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                )
-            
+            LOGGER.info("Making LLM API call to %s", self.config.model)
+            response = self._client.chat.completions.create(
+                model=self.config.model,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            )
+
             LOGGER.info("%s API call succeeded", self.config.provider.upper())
             content = response.choices[0].message.content
             return content or None
