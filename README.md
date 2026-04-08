@@ -1,3 +1,13 @@
+---
+title: Medical Triage
+emoji: 🚑
+colorFrom: red
+colorTo: blue
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # MedicalTriage
 
 MedicalTriage is an action-based triage simulation framework for comparing Random, Rule-based, LLM, and RL agents across three progressively harder tasks.
