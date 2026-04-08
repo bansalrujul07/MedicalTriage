@@ -4,7 +4,7 @@ import numpy as np
 from typing import Any, Dict
 
 
-def encode_observation(obs: Dict[str, Any]) -> np.ndarray:
+def encode_observation(obs: Any) -> tuple:
     """
     Encode observation dictionary into a numerical state vector.
     
@@ -12,13 +12,35 @@ def encode_observation(obs: Dict[str, Any]) -> np.ndarray:
         obs: Observation dictionary from environment step()
         
     Returns:
-        Encoded state as numpy array suitable for RL agent input
+        Encoded, hashable tuple suitable for Q-table indexing
     """
-    # Extract relevant state features from observation
-    # This is a simplified encoder that extracts numerical features
-    
+    # Native triage observation object path (preferred).
+    if hasattr(obs, "patients") and hasattr(obs, "resources"):
+        patients = []
+        for patient in getattr(obs, "patients", []):
+            patients.append(
+                (
+                    int(getattr(patient, "id", -1)),
+                    str(getattr(patient, "severity", "unknown")),
+                    int(round(float(getattr(patient, "health", 0.0)))),
+                    bool(getattr(patient, "alive", False)),
+                    bool(getattr(patient, "ventilated", False)),
+                )
+            )
+
+        resources = getattr(obs, "resources", None)
+        medics_available = int(getattr(resources, "medics_available", 0)) if resources is not None else 0
+        ventilators_available = int(getattr(resources, "ventilators_available", 0)) if resources is not None else 0
+        step_count = int(getattr(obs, "step_count", 0))
+
+        return (
+            tuple(sorted(patients, key=lambda p: p[0])),
+            medics_available,
+            ventilators_available,
+            step_count,
+        )
+
     if isinstance(obs, dict):
-        # Convert dict values to numerical array
         features = []
         
         # Extract triage score if present
@@ -49,12 +71,12 @@ def encode_observation(obs: Dict[str, Any]) -> np.ndarray:
         if "patient_age" in obs:
             features.append(float(obs["patient_age"]))
         
-        # Return encoded state or zero vector if empty
-        return np.array(features, dtype=np.float32) if features else np.zeros(1, dtype=np.float32)
-    
-    # If obs is already an array, return as-is
+        if not features:
+            features = [0.0]
+        return tuple(float(x) for x in features)
+
     if isinstance(obs, np.ndarray):
-        return obs.astype(np.float32)
-    
-    # Default: return empty encoded state
-    return np.zeros(1, dtype=np.float32)
+        return tuple(float(x) for x in obs.astype(np.float32).flatten().tolist())
+
+    # Default fallback keeps contract hashable and deterministic.
+    return (0.0,)
