@@ -20,6 +20,7 @@ htmlcov/
 # Environment files
 .env
 .env.*
+!.env.example
 
 # IDE
 .vscode/
@@ -38,5 +39,4 @@ dist/
 *.log
 
 #Environment variables
-.env
 triage_env/training/*.pkl
