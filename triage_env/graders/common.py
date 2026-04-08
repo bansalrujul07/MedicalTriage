@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import json
 import math
+import sys
+from pathlib import Path
 from typing import Any
+
+# Ensure triage_env package can be imported when graders are executed via file path.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from triage_env.agents.rule_based_agent import RuleBasedAgent
 from triage_env.evaluation.evaluator import evaluate_agent
