@@ -11,6 +11,17 @@ description: >
   Agents must prioritize patients, allocate limited resources, and make high-stakes decisions
   to maximize survival and health outcomes.
 
+tasks:
+  - id: task1
+    name: Baseline triage
+    grader: graders/task1_grader.py
+  - id: task2
+    name: Moderate pressure triage
+    grader: graders/task2_grader.py
+  - id: task3
+    name: High pressure triage
+    grader: graders/task3_grader.py
+
 tags:
   - openenv
   - triage
