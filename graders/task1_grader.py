@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 
-from graders.common import grade_task, print_grader_result
+try:
+    from graders.common import grade_task, print_grader_result
+except ModuleNotFoundError:
+    from common import grade_task, print_grader_result
 
 
 def main() -> None:
