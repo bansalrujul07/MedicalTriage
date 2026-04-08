@@ -14,6 +14,8 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")
 HF_TOKEN = os.getenv("HF_TOKEN")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
+DOCKER_IMAGE_NAME = os.getenv("DOCKER_IMAGE_NAME")
+IMAGE_NAME = os.getenv("IMAGE_NAME")
 
 # Environment/task controls
 TASK_NAME = os.getenv("TRIAGE_TASK", os.getenv("MY_ENV_V4_TASK", "task3"))
@@ -120,14 +122,49 @@ def _compute_score(last_obs: Optional[TriageObservation], rewards: List[float]) 
     return min(max(score, 0.0), 1.0)
 
 
+def _candidate_image_names() -> List[str]:
+    """Return likely local Docker image names in priority order."""
+    candidates = [
+        LOCAL_IMAGE_NAME,
+        DOCKER_IMAGE_NAME,
+        IMAGE_NAME,
+        "medicaltriage:latest",
+        "medicaltriage:ci",
+        "medicaltriage",
+        "triage-env:latest",
+    ]
+    return [candidate for candidate in candidates if candidate]
+
+
+async def _connect_environment() -> tuple[TriageEnv, str]:
+    """Connect to the first available local Docker image."""
+    last_error: Exception | None = None
+
+    for candidate in _candidate_image_names():
+        try:
+            env = await TriageEnv.from_docker_image(candidate)
+            return env, candidate
+        except Exception as exc:  # pragma: no cover - depends on local docker availability
+            last_error = exc
+
+    if last_error is not None:
+        raise SystemExit(
+            "Unable to start a local OpenEnv container. Set LOCAL_IMAGE_NAME or build a supported image tag "
+            "such as medicaltriage:latest. Last error: " + str(last_error)
+        ) from last_error
+
+    raise SystemExit(
+        "Unable to start a local OpenEnv container. Set LOCAL_IMAGE_NAME or build a supported image tag "
+        "such as medicaltriage:latest."
+    )
+
+
 async def main() -> None:
     if not HF_TOKEN:
         raise SystemExit("HF_TOKEN is required")
-    if not LOCAL_IMAGE_NAME:
-        raise SystemExit("LOCAL_IMAGE_NAME is required")
 
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
-    env = await TriageEnv.from_docker_image(LOCAL_IMAGE_NAME)
+    env, image_name = await _connect_environment()
 
     rewards: List[float] = []
     history: List[str] = []
@@ -136,7 +173,7 @@ async def main() -> None:
     score = 0.0
     last_obs: Optional[TriageObservation] = None
 
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
+    log_start(task=TASK_NAME, env=f"{BENCHMARK}:{image_name}", model=MODEL_NAME)
 
     try:
         result = await env.reset(task=TASK_NAME)
