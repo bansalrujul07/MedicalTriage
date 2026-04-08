@@ -18,7 +18,7 @@ tasks:
     task_name: task1
     name: Baseline triage
     enabled: true
-    grader: graders/task1.py
+    grader: python graders/task1.py
     grader_cmd: python graders/task1.py
     grader_command: python graders/task1.py
     grader_path: graders/task1.py
@@ -35,7 +35,7 @@ tasks:
     task_name: task2
     name: Moderate pressure triage
     enabled: true
-    grader: graders/task2.py
+    grader: python graders/task2.py
     grader_cmd: python graders/task2.py
     grader_command: python graders/task2.py
     grader_path: graders/task2.py
@@ -52,7 +52,7 @@ tasks:
     task_name: task3
     name: High pressure triage
     enabled: true
-    grader: graders/task3.py
+    grader: python graders/task3.py
     grader_cmd: python graders/task3.py
     grader_command: python graders/task3.py
     grader_path: graders/task3.py

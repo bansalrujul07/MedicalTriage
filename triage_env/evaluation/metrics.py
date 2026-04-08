@@ -79,12 +79,27 @@ def compute_episode_metrics(final_observation, total_reward: float, action_count
     )
     task_name = str(metadata.get("task", "task2"))
     task_config = TASK_CONFIGS.get(task_name)
+    stabilization_threshold = (
+        float(task_config.reward_weights.stabilization_threshold)
+        if task_config is not None
+        else 70.0
+    )
+    stabilized_patients = [
+        p for p in final_observation.patients if p.alive and p.health >= stabilization_threshold
+    ]
+    stabilization_rate = (
+        len(stabilized_patients) / total_patients
+        if total_patients
+        else 0.0
+    )
     terminal_failure_reason = None
     terminal_diagnostics = {
         "survival_rate": survival_rate,
         "critical_survival_rate": critical_survival_rate,
         "avg_health_alive": float(avg_health_alive),
         "alive_count": len(alive_patients),
+        "stabilized_count": len(stabilized_patients),
+        "stabilization_threshold": stabilization_threshold,
         "deaths_by_severity": deaths_by_severity,
         "ventilator_utilization": resource_utilization["ventilators"],
         "ventilator_occupancy": resource_utilization["ventilators"],
@@ -116,7 +131,7 @@ def compute_episode_metrics(final_observation, total_reward: float, action_count
         survival_rate=survival_rate,
         critical_survival_rate=critical_survival_rate,
         avg_health_alive=float(avg_health_alive),
-        stabilization_rate=(len(alive_patients) / total_patients) if total_patients else 0.0,
+        stabilization_rate=stabilization_rate,
         action_distribution=action_distribution,
         invalid_action_count=int(metadata.get("invalid_action_count", 0)),
         deaths_by_severity=deaths_by_severity,

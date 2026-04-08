@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -12,10 +13,10 @@ if str(REPO_ROOT) not in sys.path:
 
 
 def _fallback_grade(task_name: str, episodes: int, reason: str) -> dict[str, Any]:
-    base_scores = {"task1": 0.65, "task2": 0.55, "task3": 0.50}
-    score = base_scores.get(task_name, 0.5)
+    score = 0.0
     return {
-        "grader_version": "fallback-v1",
+        "grader_version": "fallback-v2-error",
+        "status": "error",
         "task": task_name,
         "task_id": task_name,
         "episodes": episodes,
@@ -30,6 +31,7 @@ def _fallback_grade(task_name: str, episodes: int, reason: str) -> dict[str, Any
         },
         "signals": {
             "fallback": 1.0,
+            "error": reason,
         },
         "summary": {
             "task": task_name,
@@ -48,7 +50,12 @@ def grade_task(task_name: str, episodes: int = 3) -> dict[str, Any]:
 
         return impl_grade_task(task_name=task_name, episodes=episodes)
     except Exception as exc:  # pragma: no cover - used for strict external validators
-        return _fallback_grade(task_name=task_name, episodes=episodes, reason=type(exc).__name__)
+        err = {
+            "type": type(exc).__name__,
+            "message": str(exc),
+            "traceback": traceback.format_exc(limit=10),
+        }
+        return _fallback_grade(task_name=task_name, episodes=episodes, reason=json.dumps(err, ensure_ascii=True))
 
 
 def print_grader_result(result: dict[str, Any]) -> None:

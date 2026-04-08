@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,13 +12,96 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from triage_env.agents.random_agent import RandomAgent
+from triage_env.agents.rl_agents import RLAgent
 from triage_env.agents.rule_based_agent import RuleBasedAgent
+from triage_env.agents.trained_q_agent import TrainedQAgent
 from triage_env.evaluation.evaluator import evaluate_agent
 from triage_env.server.triage_env_environment import TriageEnvironment
-from triage_env.tasks import TASK_CONFIGS
+from triage_env.tasks import TASK_CONFIGS, TASK_TARGETS
 
 
 GRADER_VERSION = "v2"
+
+
+def _resolve_existing_path(candidates: list[Path]) -> Path | None:
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _build_evaluated_agent(task_name: str):
+    package_root = Path(__file__).resolve().parents[1]
+
+    requested = os.getenv("TRIAGE_GRADER_AGENT", "").strip().lower()
+    if not requested:
+        # Prefer trained policies when available; otherwise use deterministic baseline.
+        q_path = _resolve_existing_path(
+            [
+                package_root / "training" / f"q_agent_{task_name}.pkl",
+                package_root / "training" / "q_agent.pkl",
+            ]
+        )
+        if q_path is not None:
+            agent = TrainedQAgent(str(q_path))
+            return agent, {"selected_agent": "TrainedQAgent", "checkpoint": str(q_path)}
+
+        rl_path = _resolve_existing_path(
+            [
+                package_root / "training" / f"triage_rl_qtable_{task_name}.json",
+                package_root / "training" / "triage_rl_qtable.json",
+            ]
+        )
+        if rl_path is not None:
+            agent = RLAgent(epsilon=0.0)
+            agent.load(str(rl_path))
+            agent.epsilon = 0.0
+            return agent, {"selected_agent": "RLAgent", "checkpoint": str(rl_path)}
+
+        return RuleBasedAgent(), {
+            "selected_agent": "RuleBasedAgent",
+            "selection_reason": "no trained checkpoint found",
+        }
+
+    if requested in {"rulebased", "rulebasedagent"}:
+        return RuleBasedAgent(), {"selected_agent": "RuleBasedAgent", "selection_reason": "explicit"}
+
+    if requested in {"random", "randomagent"}:
+        return RandomAgent(), {"selected_agent": "RandomAgent", "selection_reason": "explicit"}
+
+    if requested in {"trainedq", "trainedqagent", "q", "qlearning"}:
+        q_model = os.getenv("TRIAGE_Q_MODEL_PATH", "").strip()
+        candidates = [Path(q_model)] if q_model else []
+        candidates.extend(
+            [
+                package_root / "training" / f"q_agent_{task_name}.pkl",
+                package_root / "training" / "q_agent.pkl",
+            ]
+        )
+        q_path = _resolve_existing_path(candidates)
+        if q_path is None:
+            raise FileNotFoundError("TRIAGE_GRADER_AGENT=trainedq requested but no Q checkpoint found")
+        return TrainedQAgent(str(q_path)), {"selected_agent": "TrainedQAgent", "checkpoint": str(q_path)}
+
+    if requested in {"rl", "rlagent"}:
+        rl_model = os.getenv("TRIAGE_RL_MODEL_PATH", "").strip()
+        candidates = [Path(rl_model)] if rl_model else []
+        candidates.extend(
+            [
+                package_root / "training" / f"triage_rl_qtable_{task_name}.json",
+                package_root / "training" / "triage_rl_qtable.json",
+            ]
+        )
+        rl_path = _resolve_existing_path(candidates)
+        if rl_path is None:
+            raise FileNotFoundError("TRIAGE_GRADER_AGENT=rl requested but no RL checkpoint found")
+        agent = RLAgent(epsilon=0.0)
+        agent.load(str(rl_path))
+        agent.epsilon = 0.0
+        return agent, {"selected_agent": "RLAgent", "checkpoint": str(rl_path)}
+
+    raise ValueError(f"Unsupported TRIAGE_GRADER_AGENT value: {requested}")
 
 
 def _clip_01(value: float) -> float:
@@ -48,6 +132,7 @@ def _compute_components(task_name: str, summary: dict[str, Any]) -> dict[str, fl
     task_config = TASK_CONFIGS[task_name]
     num_patients = float(task_config.num_patients)
     max_steps = float(task_config.max_steps)
+    stabilization_threshold = float(task_config.reward_weights.stabilization_threshold)
 
     survival_rate = _clip_01(_safe_get(summary, "survival_rate"))
     critical_survival_rate = _clip_01(_safe_get(summary, "critical_survival_rate"))
@@ -66,7 +151,8 @@ def _compute_components(task_name: str, summary: dict[str, Any]) -> dict[str, fl
 
     reward_norm = _normalized_reward(avg_total_reward)
     death_penalty = _clip_01(avg_deaths / max(1.0, num_patients))
-    invalid_penalty = _clip_01(invalid_action_count / 2.0)
+    invalid_rate = invalid_action_count / max(1.0, max_steps)
+    invalid_penalty = _clip_01(invalid_rate)
     step_efficiency = _clip_01(1.0 - (avg_episode_length / max(1.0, max_steps)))
 
     rollout_achievement = _clip_01(
@@ -78,7 +164,20 @@ def _compute_components(task_name: str, summary: dict[str, Any]) -> dict[str, fl
     if task_name == "task1":
         task_specific = _clip_01(_mean(avg_health_alive, success_rate, reward_norm))
     elif task_name == "task2":
-        vent_balance = _clip_01(1.0 - abs(vent_util - 0.5) / 0.5)
+        target = TASK_TARGETS.get("task2")
+        if target is None:
+            vent_balance = _clip_01(1.0 - abs(vent_util - 0.5) / 0.5)
+        else:
+            lower = float(target.min_ventilator_utilization)
+            upper = float(target.max_ventilator_utilization or 1.0)
+            if lower <= vent_util <= upper:
+                vent_balance = 1.0
+            elif vent_util < lower:
+                margin = max(lower, 1e-6)
+                vent_balance = _clip_01(1.0 - (lower - vent_util) / margin)
+            else:
+                margin = max(1.0 - upper, 1e-6)
+                vent_balance = _clip_01(1.0 - (vent_util - upper) / margin)
         task_specific = _clip_01(_mean(critical_survival_rate, vent_balance, reward_norm))
     else:
         task_specific = _clip_01(
@@ -91,6 +190,8 @@ def _compute_components(task_name: str, summary: dict[str, Any]) -> dict[str, fl
         "efficiency": efficiency,
         "task_specific": task_specific,
         "reward_norm": reward_norm,
+        "invalid_rate": _clip_01(invalid_rate),
+        "stabilization_threshold": stabilization_threshold,
         "survival_rate": survival_rate,
         "critical_survival_rate": critical_survival_rate,
         "success_rate": success_rate,
@@ -113,9 +214,10 @@ def grade_task(task_name: str, episodes: int = 3) -> dict[str, Any]:
         raise ValueError(f"Unsupported task: {task_name}")
 
     task_config = TASK_CONFIGS[task_name]
+    agent, agent_meta = _build_evaluated_agent(task_name)
     summary, _ = evaluate_agent(
         env_class=TriageEnvironment,
-        agent=RuleBasedAgent(),
+        agent=agent,
         task=task_name,
         num_episodes=episodes,
         max_steps=task_config.max_steps,
@@ -139,10 +241,15 @@ def grade_task(task_name: str, episodes: int = 3) -> dict[str, Any]:
             "task_specific": components["task_specific"],
         },
         "signals": {
+            "selected_agent": agent_meta.get("selected_agent"),
+            "selected_checkpoint": agent_meta.get("checkpoint"),
+            "selection_reason": agent_meta.get("selection_reason"),
             "survival_rate": components["survival_rate"],
             "critical_survival_rate": components["critical_survival_rate"],
             "success_rate": components["success_rate"],
             "reward_norm": components["reward_norm"],
+            "invalid_rate": components["invalid_rate"],
+            "stabilization_threshold": components["stabilization_threshold"],
         },
         "summary": summary,
     }

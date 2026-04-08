@@ -65,12 +65,30 @@ def collect_rollout(
     Returns:
         Dictionary with collected trajectories and statistics
     """
+    def _reset(env_obj: Any):
+        reset_result = env_obj.reset()
+        if isinstance(reset_result, tuple):
+            return reset_result[0]
+        return reset_result
+
+    def _step(env_obj: Any, action_obj: Any):
+        step_result = env_obj.step(action_obj)
+        if isinstance(step_result, tuple):
+            next_obs, reward, done, truncated, info = step_result
+            return next_obs, float(reward), bool(done or truncated), info
+
+        next_obs = step_result
+        reward = float(getattr(step_result, "reward", 0.0))
+        done = bool(getattr(step_result, "done", False))
+        info = {}
+        return next_obs, reward, done, info
+
     trajectories = []
     total_reward = 0
     total_steps = 0
     
     for episode in range(num_episodes):
-        obs, _ = env.reset()
+        obs = _reset(env)
         episode_trajectory = {
             "observations": [],
             "actions": [],
@@ -87,12 +105,12 @@ def collect_rollout(
             episode_trajectory["actions"].append(action)
             
             # Step environment
-            obs, reward, done, truncated, info = env.step(action)
+            obs, reward, done, info = _step(env, action)
             episode_trajectory["rewards"].append(reward)
-            episode_trajectory["dones"].append(done or truncated)
+            episode_trajectory["dones"].append(done)
             episode_reward += reward
             
-            if done or truncated:
+            if done:
                 break
         
         trajectories.append(episode_trajectory)
