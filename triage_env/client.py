@@ -16,7 +16,13 @@ class TriageEnv(
         }
 
     def _parse_result(self, payload: Dict) -> StepResult[TriageObservation]:
-        obs_data = payload.get("observation", {})
+        obs_data = dict(payload.get("observation", {}))
+
+        # OpenEnv wraps done/reward at top level; keep observation model complete.
+        if "done" not in obs_data:
+            obs_data["done"] = bool(payload.get("done", False))
+        if "reward" not in obs_data:
+            obs_data["reward"] = float(payload.get("reward") or 0.0)
 
         observation = TriageObservation.model_validate(obs_data)
 
