@@ -14,51 +14,65 @@ description: >
 tasks:
   - id: task1
     task_id: task1
+    task: task1
+    task_name: task1
     name: Baseline triage
     enabled: true
-    grader: graders/task1_grader.py
-    grader_cmd: python graders/task1_grader.py
-    grader_command: python graders/task1_grader.py
-    grader_path: graders/task1_grader.py
-    grader_file: graders/task1_grader.py
+    grader: graders/task1.py
+    grader_cmd: python graders/task1.py
+    grader_command: python graders/task1.py
+    grader_path: graders/task1.py
+    grader_file: graders/task1.py
+    grader_legacy_path: graders/task1_grader.py
     graders:
       - type: python
         name: default
-        path: graders/task1_grader.py
-        command: python graders/task1_grader.py
+        path: graders/task1.py
+        command: python graders/task1.py
   - id: task2
     task_id: task2
+    task: task2
+    task_name: task2
     name: Moderate pressure triage
     enabled: true
-    grader: graders/task2_grader.py
-    grader_cmd: python graders/task2_grader.py
-    grader_command: python graders/task2_grader.py
-    grader_path: graders/task2_grader.py
-    grader_file: graders/task2_grader.py
+    grader: graders/task2.py
+    grader_cmd: python graders/task2.py
+    grader_command: python graders/task2.py
+    grader_path: graders/task2.py
+    grader_file: graders/task2.py
+    grader_legacy_path: graders/task2_grader.py
     graders:
       - type: python
         name: default
-        path: graders/task2_grader.py
-        command: python graders/task2_grader.py
+        path: graders/task2.py
+        command: python graders/task2.py
   - id: task3
     task_id: task3
+    task: task3
+    task_name: task3
     name: High pressure triage
     enabled: true
-    grader: graders/task3_grader.py
-    grader_cmd: python graders/task3_grader.py
-    grader_command: python graders/task3_grader.py
-    grader_path: graders/task3_grader.py
-    grader_file: graders/task3_grader.py
+    grader: graders/task3.py
+    grader_cmd: python graders/task3.py
+    grader_command: python graders/task3.py
+    grader_path: graders/task3.py
+    grader_file: graders/task3.py
+    grader_legacy_path: graders/task3_grader.py
     graders:
       - type: python
         name: default
-        path: graders/task3_grader.py
-        command: python graders/task3_grader.py
+        path: graders/task3.py
+        command: python graders/task3.py
 
 graders:
-  task1: graders/task1_grader.py
-  task2: graders/task2_grader.py
-  task3: graders/task3_grader.py
+  task1: graders/task1.py
+  task2: graders/task2.py
+  task3: graders/task3.py
+
+task_graders:
+  task1: python graders/task1.py
+  task2: python graders/task2.py
+  task3: python graders/task3.py
 
 tags:
   - openenv
