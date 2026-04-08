@@ -35,6 +35,10 @@ except Exception as e:  # pragma: no cover
         "openenv is required for the web interface. Install dependencies with '\n    uv sync\n'"
     ) from e
 
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, RedirectResponse
+
 try:
     from ..models import TriageAction, TriageObservation
     from .triage_env_environment import TriageEnvironment
@@ -51,6 +55,56 @@ app = create_app(
     env_name="triage_env",
     max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
 )
+
+
+def _has_route(path: str) -> bool:
+    return any(getattr(route, "path", None) == path for route in app.routes)
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    # On Spaces, users land on "/" first. Redirect to docs when available.
+    if _has_route("/docs"):
+        return RedirectResponse(url="/docs")
+    return {
+        "message": "MedicalTriage API is running",
+        "health": "/health",
+        "openapi": "/openapi.json",
+        "docs": "/docs",
+    }
+
+
+if not _has_route("/openapi.json"):
+
+    @app.get("/openapi.json", include_in_schema=False)
+    def openapi_json():
+        schema = get_openapi(
+            title="Medical Triage API",
+            version="1.0.0",
+            description="OpenAPI schema for the MedicalTriage environment server.",
+            routes=app.routes,
+        )
+        return JSONResponse(schema)
+
+
+if not _has_route("/docs"):
+
+    @app.get("/docs", include_in_schema=False)
+    def swagger_ui():
+        return get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title="Medical Triage API Docs",
+        )
+
+
+if not _has_route("/redoc"):
+
+    @app.get("/redoc", include_in_schema=False)
+    def redoc_ui():
+        return get_redoc_html(
+            openapi_url="/openapi.json",
+            title="Medical Triage API ReDoc",
+        )
 
 
 def main(host: str = "0.0.0.0", port: int = 8000):
