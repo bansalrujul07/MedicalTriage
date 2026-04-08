@@ -39,3 +39,4 @@ dist/
 
 #Environment variables
 .env
+triage_env/training/*.pkl
