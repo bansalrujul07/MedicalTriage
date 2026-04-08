@@ -21,7 +21,7 @@ from triage_env.server.triage_env_environment import TriageEnvironment
 from triage_env.tasks import TASK_CONFIGS, TASK_TARGETS
 
 
-GRADER_VERSION = "v2"
+GRADER_VERSION = "v2.0"
 
 
 def _resolve_existing_path(candidates: list[Path]) -> Path | None:
@@ -209,7 +209,7 @@ def _compute_final_score(components: dict[str, float]) -> float:
     return _clip_01(score)
 
 
-def grade_task(task_name: str, episodes: int = 3) -> dict[str, Any]:
+def grade_task(task_name: str, episodes: int = 20) -> dict[str, Any]:
     if task_name not in TASK_CONFIGS:
         raise ValueError(f"Unsupported task: {task_name}")
 

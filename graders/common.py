@@ -15,7 +15,7 @@ if str(REPO_ROOT) not in sys.path:
 def _fallback_grade(task_name: str, episodes: int, reason: str) -> dict[str, Any]:
     score = 0.0
     return {
-        "grader_version": "fallback-v2-error",
+        "grader_version": "fallback-v2.0-error",
         "status": "error",
         "task": task_name,
         "task_id": task_name,
@@ -44,7 +44,7 @@ def _fallback_grade(task_name: str, episodes: int, reason: str) -> dict[str, Any
     }
 
 
-def grade_task(task_name: str, episodes: int = 3) -> dict[str, Any]:
+def grade_task(task_name: str, episodes: int = 20) -> dict[str, Any]:
     try:
         from triage_env.graders.common import grade_task as impl_grade_task
 
