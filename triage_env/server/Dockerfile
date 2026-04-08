@@ -40,14 +40,14 @@ RUN if ! command -v uv >/dev/null 2>&1; then \
     
 # Install dependencies using uv sync
 # If uv.lock exists, use it; otherwise resolve on the fly
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN \
     if [ -f uv.lock ]; then \
         uv sync --frozen --no-install-project --no-editable; \
     else \
         uv sync --no-install-project --no-editable; \
     fi
 
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN \
     if [ -f uv.lock ]; then \
         uv sync --frozen --no-editable; \
     else \

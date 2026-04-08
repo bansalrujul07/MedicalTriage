@@ -77,7 +77,16 @@ def stop_at(step_name: str) -> None:
     raise SystemExit(1)
 
 
-def run_command(cmd: list[str], *, cwd: Path | None = None, timeout: int | None = None) -> tuple[int, str]:
+def run_command(
+    cmd: list[str],
+    *,
+    cwd: Path | None = None,
+    timeout: int | None = None,
+    extra_env: dict[str, str] | None = None,
+) -> tuple[int, str]:
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
     try:
         proc = subprocess.run(
             cmd,
@@ -86,6 +95,7 @@ def run_command(cmd: list[str], *, cwd: Path | None = None, timeout: int | None 
             stderr=subprocess.STDOUT,
             text=True,
             timeout=timeout,
+            env=env,
             check=False,
         )
         return proc.returncode, proc.stdout or ""
@@ -141,16 +151,16 @@ def check_step1_ping(ping_url: str) -> None:
     stop_at("Step 1")
 
 
-def find_docker_context(repo_dir: Path) -> Path | None:
+def find_docker_context(repo_dir: Path) -> tuple[Path, Path] | None:
     root_docker = repo_dir / "Dockerfile"
     server_docker = repo_dir / "server" / "Dockerfile"
     nested_server_docker = repo_dir / "triage_env" / "server" / "Dockerfile"
     if root_docker.exists():
-        return repo_dir
+        return repo_dir, root_docker
     if server_docker.exists():
-        return server_docker.parent
+        return repo_dir, server_docker
     if nested_server_docker.exists():
-        return nested_server_docker.parent
+        return repo_dir, nested_server_docker
     return None
 
 
@@ -162,15 +172,18 @@ def check_step2_docker_build(repo_dir: Path) -> None:
         hint("Install Docker: https://docs.docker.com/get-docker/")
         stop_at("Step 2")
 
-    docker_context = find_docker_context(repo_dir)
-    if docker_context is None:
+    docker_info = find_docker_context(repo_dir)
+    if docker_info is None:
         fail_msg("No Dockerfile found in repo root, server/, or triage_env/server/")
         stop_at("Step 2")
 
-    log(f"  Found Dockerfile in {docker_context}")
+    docker_context, dockerfile_path = docker_info
+
+    log(f"  Found Dockerfile: {dockerfile_path}")
+    log(f"  Build context:   {docker_context}")
 
     rc, output = run_command(
-        ["docker", "build", str(docker_context)],
+        ["docker", "build", "-f", str(dockerfile_path), str(docker_context)],
         timeout=DOCKER_BUILD_TIMEOUT,
     )
 
