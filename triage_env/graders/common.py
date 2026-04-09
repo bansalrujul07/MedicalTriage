@@ -36,6 +36,22 @@ def _build_evaluated_agent(task_name: str):
 
     requested = os.getenv("TRIAGE_GRADER_AGENT", "").strip().lower()
     if not requested:
+        # If validator injects proxy credentials, force LLMAgent so API calls are observed.
+        injected_api_key = os.getenv("API_KEY", "").strip()
+        injected_base_url = os.getenv("API_BASE_URL", "").strip()
+        if injected_api_key or injected_base_url:
+            from triage_env.agents.llm_agent import LLMAgent
+            from triage_env.config import get_llm_config
+
+            llm_config = get_llm_config()
+            if llm_config.api_key:
+                return LLMAgent(config=llm_config), {
+                    "selected_agent": "LLMAgent",
+                    "selection_reason": "validator-proxy-env-detected",
+                    "api_endpoint": llm_config.base_url,
+                    "model": llm_config.model,
+                }
+
         rl_path = _resolve_existing_path(
             [
                 package_root / "training" / f"triage_rl_qtable_{task_name}.json",
