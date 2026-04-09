@@ -1,18 +1,25 @@
 import asyncio
 import os
+from pathlib import Path
 from typing import List, Optional
 
+from dotenv import load_dotenv
 from openai import OpenAI
 
 from triage_env.agents.parser import parse_llm_action
 from triage_env.client import TriageEnv
 from triage_env.models import TriageAction, TriageObservation
 
+# Load .env file from repo root if it exists (ensures LOCAL_IMAGE_NAME is available during validator runs)
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
+
 # Required by challenge spec
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
-LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "").strip()
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "medicaltriage:latest").strip()
 
 # Environment/task controls
 TASK_NAME = os.getenv("TRIAGE_TASK", os.getenv("MY_ENV_V4_TASK", "task3")).strip()
@@ -120,10 +127,14 @@ def _compute_score(last_obs: Optional[TriageObservation], rewards: List[float]) 
 
 
 async def _connect_environment() -> tuple[TriageEnv, str]:
-    if not LOCAL_IMAGE_NAME:
-        raise SystemExit("LOCAL_IMAGE_NAME is required")
-    env = await TriageEnv.from_docker_image(LOCAL_IMAGE_NAME)
-    return env, LOCAL_IMAGE_NAME
+    if not LOCAL_IMAGE_NAME or not LOCAL_IMAGE_NAME.strip():
+        # Fall back to default if somehow empty
+        image_name = "medicaltriage:latest"
+    else:
+        image_name = LOCAL_IMAGE_NAME.strip()
+    
+    env = await TriageEnv.from_docker_image(image_name)
+    return env, image_name
 
 
 async def _run_task(env: TriageEnv, client: OpenAI, task_name: str) -> tuple[bool, int, float, List[float]]:
