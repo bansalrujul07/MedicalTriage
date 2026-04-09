@@ -36,6 +36,7 @@ packages = [
     "triage_env.agents",
     "triage_env.evaluation",
     "triage_env.training",
+    "triage_env.graders",
     "triage_env.server",
     "triage_env.tests",
 ]
