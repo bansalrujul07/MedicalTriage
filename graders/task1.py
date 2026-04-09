@@ -17,13 +17,19 @@ except ModuleNotFoundError:
     from common import grade_task as common_grade_task, print_grader_result
 
 
+def _clip_score_strict(score: float) -> float:
+    epsilon = 0.001
+    clipped = max(0.0, min(1.0, float(score)))
+    return epsilon + clipped * (1.0 - 2.0 * epsilon)
+
+
 def grade_task(episodes: int = 20):
     return common_grade_task("task1", episodes=episodes)
 
 
 def grade(episodes: int = 20) -> float:
     result = grade_task(episodes=episodes)
-    return float(result.get("score", 0.0))
+    return _clip_score_strict(float(result.get("score", 0.5)))
 
 
 def main() -> None:
