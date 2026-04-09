@@ -1,8 +1,9 @@
 import logging
 import os
+import time
 from typing import Callable
 
-from openai import OpenAI
+from openai import APIConnectionError, APITimeoutError, OpenAI
 
 from triage_env.agents.base_agent import BaseAgent
 from triage_env.agents.parser import parse_llm_action
@@ -31,6 +32,8 @@ class LLMAgent(BaseAgent):
         self.llm_callable = llm_callable
         self._client: OpenAI | None = None
         self._missing_key_warned = False
+        self._max_attempts = max(1, int(os.getenv("TRIAGE_LLM_RETRIES", "3")))
+        self._retry_delay_seconds = max(0.0, float(os.getenv("TRIAGE_LLM_RETRY_DELAY", "0.5")))
         # In validator context, never silently degrade to non-LLM behavior.
         self._strict_proxy_mode = bool(
             os.getenv("API_KEY", "").strip() or os.getenv("API_BASE_URL", "").strip()
@@ -81,26 +84,40 @@ class LLMAgent(BaseAgent):
                 self._missing_key_warned = True
             return None
 
-        try:
-            LOGGER.info("Making LLM API call to %s", self.config.model)
-            response = self._client.chat.completions.create(
-                model=self.config.model,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-            )
+        last_exc: Exception | None = None
+        for attempt in range(1, self._max_attempts + 1):
+            try:
+                LOGGER.info("Making LLM API call to %s (attempt %s/%s)", self.config.model, attempt, self._max_attempts)
+                response = self._client.chat.completions.create(
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                )
 
-            LOGGER.info("OpenAI API call succeeded")
-            content = response.choices[0].message.content
-            return content or None
-        except Exception as exc:  # pragma: no cover
+                LOGGER.info("OpenAI API call succeeded")
+                content = response.choices[0].message.content
+                return content or None
+            except (APITimeoutError, APIConnectionError, TimeoutError, OSError) as exc:
+                last_exc = exc
+                if attempt >= self._max_attempts:
+                    break
+                sleep_seconds = min(self._retry_delay_seconds * (2 ** (attempt - 1)), 5.0)
+                LOGGER.warning("OpenAI request attempt %s/%s failed: %s; retrying in %.2fs", attempt, self._max_attempts, exc, sleep_seconds)
+                if sleep_seconds > 0:
+                    time.sleep(sleep_seconds)
+            except Exception as exc:  # pragma: no cover
+                last_exc = exc
+                break
+
+        if last_exc is not None:
             if self._strict_proxy_mode:
-                raise
-            LOGGER.warning("OpenAI request failed: %s", exc)
-            return None
+                raise last_exc
+            LOGGER.warning("OpenAI request failed: %s", last_exc)
+        return None
 
     def _is_valid_action(self, observation: TriageObservation, action: TriageAction) -> bool:
         alive_patients = {p.id: p for p in observation.patients if p.alive}
