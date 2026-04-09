@@ -1,24 +1,17 @@
 import asyncio
 import os
-from pathlib import Path
 from typing import List, Optional
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
 from triage_env.agents.parser import parse_llm_action
 from triage_env.client import TriageEnv
 from triage_env.models import TriageAction, TriageObservation
 
-# Load .env file from repo root if it exists (ensures LOCAL_IMAGE_NAME is available during validator runs)
-_env_path = Path(__file__).parent / ".env"
-if _env_path.exists():
-    load_dotenv(_env_path)
-
 # Required by challenge spec
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-API_KEY = os.getenv("API_KEY", "").strip() or os.getenv("HF_TOKEN", "").strip()
+API_KEY = os.getenv("API_KEY", "").strip()
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "medicaltriage:latest").strip()
 
 # Environment/task controls
