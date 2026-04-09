@@ -55,16 +55,21 @@ class RuntimeConfig:
 def get_llm_config() -> LLMConfig:
     provider = os.getenv("TRIAGE_LLM_PROVIDER", "openai").lower()
 
-    if provider == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
-        model = os.getenv("TRIAGE_LLM_MODEL", "gpt-4.1-mini")
-        base_url = os.getenv("TRIAGE_LLM_BASE_URL")
-    else:
-        # Compatibility mode for OpenAI-compatible providers.
-        # Uses the OpenAI Python client with provider-specific base URL.
-        api_key = os.getenv("GROQ_API_KEY")
-        model = os.getenv("TRIAGE_LLM_MODEL", "llama-3.3-70b-versatile")
+    # Prioritize validator-injected variables (API_KEY, API_BASE_URL) over local config
+    api_key = (
+        os.getenv("API_KEY", "").strip()
+        or os.getenv("OPENAI_API_KEY", "").strip()
+        or os.getenv("GROQ_API_KEY", "").strip()
+    ) or None
+    
+    base_url = os.getenv("API_BASE_URL", "").strip() or None
+    model = os.getenv("TRIAGE_LLM_MODEL", "gpt-4.1-mini")
+    
+    # Set provider-specific defaults only if base_url not injected
+    if not base_url and provider != "openai":
         base_url = os.getenv("TRIAGE_LLM_BASE_URL", "https://api.groq.com/openai/v1")
+    elif not base_url:
+        base_url = os.getenv("TRIAGE_LLM_BASE_URL")
 
     return LLMConfig(
         api_key=api_key,

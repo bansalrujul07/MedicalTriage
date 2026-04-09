@@ -58,6 +58,20 @@ def _build_evaluated_agent(task_name: str):
             agent = TrainedQAgent(str(q_path))
             return agent, {"selected_agent": "TrainedQAgent", "checkpoint": str(q_path)}
 
+        # Fall back to LLMAgent to use the validator's LLM proxy if available
+        from triage_env.agents.llm_agent import LLMAgent
+        from triage_env.config import get_llm_config
+        
+        llm_config = get_llm_config()
+        if llm_config.api_key:
+            return LLMAgent(config=llm_config), {
+                "selected_agent": "LLMAgent",
+                "selection_reason": "fallback-to-llm-proxy",
+                "api_endpoint": llm_config.base_url,
+                "model": llm_config.model,
+            }
+        
+        # Only fall back to RuleBasedAgent if explicitly enabled and no API key available
         allow_baseline = os.getenv("TRIAGE_GRADER_ALLOW_BASELINE", "").strip().lower() in {
             "1",
             "true",
