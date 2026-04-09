@@ -34,12 +34,14 @@ def _resolve_existing_path(candidates: list[Path]) -> Path | None:
 def _build_evaluated_agent(task_name: str):
     package_root = Path(__file__).resolve().parents[1]
 
+    injected_api_key = os.getenv("API_KEY", "").strip()
+    injected_base_url = os.getenv("API_BASE_URL", "").strip()
+    proxy_env_detected = bool(injected_api_key or injected_base_url)
+
     requested = os.getenv("TRIAGE_GRADER_AGENT", "").strip().lower()
     if not requested:
         # If validator injects proxy credentials, force LLMAgent so API calls are observed.
-        injected_api_key = os.getenv("API_KEY", "").strip()
-        injected_base_url = os.getenv("API_BASE_URL", "").strip()
-        if injected_api_key or injected_base_url:
+        if proxy_env_detected:
             from triage_env.agents.llm_agent import LLMAgent
             from triage_env.config import get_llm_config
 
@@ -87,18 +89,6 @@ def _build_evaluated_agent(task_name: str):
                 "model": llm_config.model,
             }
         
-        # Only fall back to RuleBasedAgent if explicitly enabled and no API key available
-        allow_baseline = os.getenv("TRIAGE_GRADER_ALLOW_BASELINE", "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-        }
-        if allow_baseline:
-            return RuleBasedAgent(), {
-                "selected_agent": "RuleBasedAgent",
-                "selection_reason": "explicit-baseline-fallback",
-            }
-
         raise FileNotFoundError(
             "No trained checkpoint found for grading. Expected one of: "
             f"{package_root / 'training' / f'triage_rl_qtable_{task_name}.json'}, "
@@ -108,6 +98,18 @@ def _build_evaluated_agent(task_name: str):
         )
 
     if requested in {"rulebased", "rulebasedagent"}:
+        if proxy_env_detected:
+            from triage_env.agents.llm_agent import LLMAgent
+            from triage_env.config import get_llm_config
+
+            llm_config = get_llm_config()
+            if llm_config.api_key:
+                return LLMAgent(config=llm_config), {
+                    "selected_agent": "LLMAgent",
+                    "selection_reason": "rulebased-overridden-by-validator-proxy-env",
+                    "api_endpoint": llm_config.base_url,
+                    "model": llm_config.model,
+                }
         return RuleBasedAgent(), {"selected_agent": "RuleBasedAgent", "selection_reason": "explicit"}
 
     if requested in {"random", "randomagent"}:
