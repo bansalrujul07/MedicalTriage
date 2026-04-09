@@ -36,17 +36,6 @@ def _build_evaluated_agent(task_name: str):
 
     requested = os.getenv("TRIAGE_GRADER_AGENT", "").strip().lower()
     if not requested:
-        # Prefer trained policies when available; otherwise use deterministic baseline.
-        q_path = _resolve_existing_path(
-            [
-                package_root / "training" / f"q_agent_{task_name}.pkl",
-                package_root / "training" / "q_agent.pkl",
-            ]
-        )
-        if q_path is not None:
-            agent = TrainedQAgent(str(q_path))
-            return agent, {"selected_agent": "TrainedQAgent", "checkpoint": str(q_path)}
-
         rl_path = _resolve_existing_path(
             [
                 package_root / "training" / f"triage_rl_qtable_{task_name}.json",
@@ -59,10 +48,34 @@ def _build_evaluated_agent(task_name: str):
             agent.epsilon = 0.0
             return agent, {"selected_agent": "RLAgent", "checkpoint": str(rl_path)}
 
-        return RuleBasedAgent(), {
-            "selected_agent": "RuleBasedAgent",
-            "selection_reason": "no trained checkpoint found",
+        q_path = _resolve_existing_path(
+            [
+                package_root / "training" / f"q_agent_{task_name}.pkl",
+                package_root / "training" / "q_agent.pkl",
+            ]
+        )
+        if q_path is not None:
+            agent = TrainedQAgent(str(q_path))
+            return agent, {"selected_agent": "TrainedQAgent", "checkpoint": str(q_path)}
+
+        allow_baseline = os.getenv("TRIAGE_GRADER_ALLOW_BASELINE", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
         }
+        if allow_baseline:
+            return RuleBasedAgent(), {
+                "selected_agent": "RuleBasedAgent",
+                "selection_reason": "explicit-baseline-fallback",
+            }
+
+        raise FileNotFoundError(
+            "No trained checkpoint found for grading. Expected one of: "
+            f"{package_root / 'training' / f'triage_rl_qtable_{task_name}.json'}, "
+            f"{package_root / 'training' / 'triage_rl_qtable.json'}, "
+            f"{package_root / 'training' / f'q_agent_{task_name}.pkl'}, "
+            f"{package_root / 'training' / 'q_agent.pkl'}."
+        )
 
     if requested in {"rulebased", "rulebasedagent"}:
         return RuleBasedAgent(), {"selected_agent": "RuleBasedAgent", "selection_reason": "explicit"}
