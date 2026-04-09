@@ -17,6 +17,12 @@ from triage_env.tasks import TASK_CONFIGS
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 LOGGER = logging.getLogger(__name__)
+STRICT_BENCHMARK_ERRORS = os.getenv("TRIAGE_BENCHMARK_STRICT_ERRORS", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 def _read_checkpoint_metadata(model_path: Path) -> dict:
@@ -143,6 +149,8 @@ def benchmark_agents(
                     max_steps=task_config.max_steps,
                 )
             except Exception as exc:
+                if STRICT_BENCHMARK_ERRORS:
+                    raise
                 LOGGER.warning(
                     "Skipping agent %s on task %s due to evaluation error: %s",
                     getattr(agent, "name", agent.__class__.__name__),

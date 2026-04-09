@@ -172,6 +172,24 @@ def find_openenv_dir(repo_dir: Path) -> Path | None:
     return None
 
 
+def find_openenv_executable(repo_dir: Path) -> str | None:
+    """Resolve openenv executable from PATH or local virtualenv locations."""
+    in_path = shutil.which("openenv")
+    if in_path:
+        return in_path
+
+    candidates = [
+        repo_dir / ".venv" / "Scripts" / "openenv.exe",
+        repo_dir / ".venv" / "Scripts" / "openenv",
+        repo_dir / ".venv" / "bin" / "openenv",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    return None
+
+
 def check_step2_docker_build(repo_dir: Path) -> None:
     log(f"{C.bold}Step 2/3: Running docker build{C.nc} ...")
 
@@ -209,9 +227,11 @@ def check_step2_docker_build(repo_dir: Path) -> None:
 def check_step3_openenv_validate(repo_dir: Path) -> None:
     log(f"{C.bold}Step 3/3: Running openenv validate{C.nc} ...")
 
-    if shutil.which("openenv") is None:
+    openenv_executable = find_openenv_executable(repo_dir)
+    if openenv_executable is None:
         fail_msg("openenv command not found")
-        hint("Install it: pip install openenv-core")
+        hint("Install it in your active environment: pip install openenv-core")
+        hint("Or run validator via project venv Python: .venv/Scripts/python validation.py ...")
         stop_at("Step 3")
 
     # Find the actual OpenEnv environment directory
@@ -223,7 +243,7 @@ def check_step3_openenv_validate(repo_dir: Path) -> None:
 
     log(f"  Found openenv.yaml in: {env_dir}")
 
-    rc, output = run_command(["openenv", "validate"], cwd=env_dir)
+    rc, output = run_command([openenv_executable, "validate"], cwd=env_dir)
 
     if rc == 0:
         pass_msg("openenv validate passed")

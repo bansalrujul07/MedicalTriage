@@ -4,15 +4,17 @@ import sys
 from triage_env.server.triage_env_environment import TriageEnvironment
 from triage_env.agents.llm_agent import LLMAgent
 
+LOGGER = logging.getLogger(__name__)
 
-if not logging.getLogger().handlers:
+
+def _configure_logging() -> None:
+    if logging.getLogger().handlers:
+        return
     logging.basicConfig(
         level=logging.INFO,
         stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-
-LOGGER = logging.getLogger(__name__)
 
 
 def mock_llm(system_prompt: str, user_prompt: str) -> str:
@@ -22,6 +24,7 @@ def mock_llm(system_prompt: str, user_prompt: str) -> str:
 
 
 def main():
+    _configure_logging()
     env = TriageEnvironment(max_steps=20)
     agent = LLMAgent(llm_callable=mock_llm)
 

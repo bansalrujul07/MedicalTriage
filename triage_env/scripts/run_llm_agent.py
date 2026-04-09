@@ -8,18 +8,21 @@ from triage_env.config import get_runtime_config
 from triage_env.evaluation.evaluator import run_single_episode
 from triage_env.server.triage_env_environment import TriageEnvironment
 
+LOGGER = logging.getLogger(__name__)
 
-if not logging.getLogger().handlers:
+
+def _configure_logging() -> None:
+    if logging.getLogger().handlers:
+        return
     logging.basicConfig(
         level=logging.INFO,
         stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-LOGGER = logging.getLogger(__name__)
-
 
 def main() -> None:
+    _configure_logging()
     runtime = get_runtime_config()
     llm_config = get_llm_config()
     parser = argparse.ArgumentParser(description="Run LLM triage agent")
