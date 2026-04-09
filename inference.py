@@ -11,15 +11,8 @@ from triage_env.models import TriageAction, TriageObservation
 # Required by challenge spec
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-# Try to read API key in priority order:
-# 1. API_KEY (validator-injected proxy key)
-# 2. OPENAI_API_KEY (system standard)
-# 3. HF_TOKEN (local fallback)
-API_KEY = (
-    os.getenv("API_KEY", "").strip()
-    or os.getenv("OPENAI_API_KEY", "").strip()
-    or os.getenv("HF_TOKEN", "").strip()
-)
+# Use only the validator-injected proxy key to avoid bypassing proxy accounting.
+API_KEY = os.getenv("API_KEY", "").strip()
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "medicaltriage:latest").strip()
 
 # Environment/task controls
@@ -104,6 +97,20 @@ def _select_action(client: OpenAI, step: int, obs: TriageObservation, history: L
 
     # Reuse repository parser to coerce partial/invalid model payloads safely.
     return parse_llm_action(text)
+
+
+def _proxy_ping_call(client: OpenAI) -> None:
+    # Force one lightweight request through the configured OpenAI-compatible proxy.
+    client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": "Respond with OK."},
+            {"role": "user", "content": "OK"},
+        ],
+        temperature=0.0,
+        max_tokens=1,
+        stream=False,
+    )
 
 
 def _compute_score(last_obs: Optional[TriageObservation], rewards: List[float]) -> float:
@@ -205,9 +212,10 @@ async def main() -> None:
 
     try:
         if not API_KEY:
-            raise RuntimeError("API_KEY, OPENAI_API_KEY, or HF_TOKEN is required")
+            raise RuntimeError("API_KEY is required")
 
         client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+        _proxy_ping_call(client)
         env, _ = await _connect_environment()
         success, steps_taken, score, rewards = await _run_task(env=env, client=client, task_name=TASK_NAME)
     except Exception:
