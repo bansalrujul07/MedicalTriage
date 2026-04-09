@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Callable
 
 from openai import OpenAI
@@ -30,6 +31,10 @@ class LLMAgent(BaseAgent):
         self.llm_callable = llm_callable
         self._client: OpenAI | None = None
         self._missing_key_warned = False
+        # In validator context, never silently degrade to non-LLM behavior.
+        self._strict_proxy_mode = bool(
+            os.getenv("API_KEY", "").strip() or os.getenv("API_BASE_URL", "").strip()
+        )
 
         if self.llm_callable is None and self.config.api_key:
             LOGGER.info("Initializing OpenAI-compatible client for model %s", self.config.model)
@@ -47,6 +52,8 @@ class LLMAgent(BaseAgent):
         raw = self._query_llm(system_prompt, user_prompt)
 
         if raw is None:
+            if self._strict_proxy_mode:
+                raise RuntimeError("LLM response missing in strict proxy mode")
             return self._safe_fallback_action(observation)
 
         action = parse_llm_action(raw)
@@ -61,10 +68,14 @@ class LLMAgent(BaseAgent):
             try:
                 return self.llm_callable(system_prompt, user_prompt)
             except Exception as exc:  # pragma: no cover
+                if self._strict_proxy_mode:
+                    raise
                 LOGGER.warning("Custom llm_callable failed: %s", exc)
                 return None
 
         if self._client is None:
+            if self._strict_proxy_mode:
+                raise RuntimeError("OpenAI client is not initialized in strict proxy mode")
             if not self._missing_key_warned:
                 LOGGER.warning("%s API key missing; LLMAgent using fallback policy", self.config.provider.upper())
                 self._missing_key_warned = True
@@ -86,6 +97,8 @@ class LLMAgent(BaseAgent):
             content = response.choices[0].message.content
             return content or None
         except Exception as exc:  # pragma: no cover
+            if self._strict_proxy_mode:
+                raise
             LOGGER.warning("%s request failed: %s", self.config.provider.upper(), exc)
             return None
 
