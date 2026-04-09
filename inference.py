@@ -12,16 +12,18 @@ from triage_env.models import TriageAction, TriageObservation
 # Required by challenge spec
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")
-HF_TOKEN = os.getenv("HF_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 DOCKER_IMAGE_NAME = os.getenv("DOCKER_IMAGE_NAME")
 IMAGE_NAME = os.getenv("IMAGE_NAME")
 
 # Environment/task controls
-TASK_NAME = os.getenv("TRIAGE_TASK", os.getenv("MY_ENV_V4_TASK", "task3"))
+TASKS_ENV = os.getenv("TRIAGE_TASKS", "task1,task2,task3")
+SINGLE_TASK = os.getenv("TRIAGE_TASK", os.getenv("MY_ENV_V4_TASK", "")).strip()
 BENCHMARK = os.getenv("TRIAGE_BENCHMARK", "medicaltriage")
 MAX_STEPS = int(os.getenv("TRIAGE_MAX_STEPS", "28"))
-TEMPERATURE = float(os.getenv("TRIAGE_TEMPERATURE", "0.2"))
+TEMPERATURE = float(os.getenv("TRIAGE_TEMPERATURE", "0.0"))
 MAX_TOKENS = int(os.getenv("TRIAGE_MAX_TOKENS", "220"))
 SUCCESS_SCORE_THRESHOLD = float(os.getenv("TRIAGE_SUCCESS_THRESHOLD", "0.50"))
 
@@ -71,7 +73,7 @@ def _build_user_prompt(step: int, observation: TriageObservation, history: List[
     history_block = "\n".join(history[-6:]) if history else "none"
     return (
         f"Step={step}\n"
-        f"Task={TASK_NAME}\n"
+        f"Task={observation.metadata.get('task', 'unknown')}\n"
         f"Resources: medics={observation.resources.medics_available}, "
         f"ventilators={observation.resources.ventilators_available}\n"
         f"Patients:\n- " + "\n- ".join(patient_rows) + "\n"
@@ -159,13 +161,17 @@ async def _connect_environment() -> tuple[TriageEnv, str]:
     )
 
 
-async def main() -> None:
-    if not HF_TOKEN:
-        raise SystemExit("HF_TOKEN is required")
+def _resolve_tasks() -> List[str]:
+    if SINGLE_TASK:
+        return [SINGLE_TASK]
 
-    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
-    env, image_name = await _connect_environment()
+    raw = [part.strip() for part in TASKS_ENV.split(",") if part.strip()]
+    allowed = {"task1", "task2", "task3"}
+    tasks = [task for task in raw if task in allowed]
+    return tasks or ["task1", "task2", "task3"]
 
+
+async def _run_task(env: TriageEnv, client: OpenAI, task_name: str) -> dict:
     rewards: List[float] = []
     history: List[str] = []
     steps_taken = 0
@@ -173,62 +179,89 @@ async def main() -> None:
     score = 0.0
     last_obs: Optional[TriageObservation] = None
 
-    log_start(task=TASK_NAME, env=f"{BENCHMARK}:{image_name}", model=MODEL_NAME)
+    log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+
+    result = await env.reset(task=task_name)
+    last_obs = result.observation
+
+    for step in range(1, MAX_STEPS + 1):
+        if result.done:
+            break
+
+        error_val: Optional[str] = None
+        reward_val = 0.0
+        done_val = False
+        action = TriageAction(action_type="wait", patient_id=-1)
+
+        try:
+            action = _select_action(client, step, result.observation, history)
+            result = await env.step(action)
+            last_obs = result.observation
+
+            reward_val = float(result.reward or 0.0)
+            done_val = bool(result.done)
+            error_meta = None
+            if getattr(result.observation, "metadata", None):
+                error_meta = result.observation.metadata.get("last_action_error")
+            error_val = error_meta if error_meta else None
+        except Exception as exc:
+            reward_val = 0.0
+            done_val = True
+            error_val = str(exc)
+
+        rewards.append(reward_val)
+        steps_taken = step
+        log_step(
+            step=step,
+            action=_action_to_str(action),
+            reward=reward_val,
+            done=done_val,
+            error=error_val,
+        )
+        history.append(
+            json.dumps(
+                {
+                    "step": step,
+                    "action": _action_to_str(action),
+                    "reward": round(reward_val, 2),
+                    "done": done_val,
+                }
+            )
+        )
+
+        if done_val:
+            break
+
+    score = _compute_score(last_obs, rewards)
+    success = score >= SUCCESS_SCORE_THRESHOLD
+    log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+
+    return {
+        "task": task_name,
+        "score": round(score, 4),
+        "steps": steps_taken,
+        "success": success,
+        "model": MODEL_NAME,
+    }
+
+
+async def main() -> None:
+    api_key = OPENAI_API_KEY or HF_TOKEN
+    if not api_key:
+        raise SystemExit("OPENAI_API_KEY is required")
+
+    client = OpenAI(base_url=API_BASE_URL, api_key=api_key)
+    env, image_name = await _connect_environment()
+    tasks = _resolve_tasks()
+    summary: List[dict] = []
 
     try:
-        result = await env.reset(task=TASK_NAME)
-        last_obs = result.observation
-
-        for step in range(1, MAX_STEPS + 1):
-            if result.done:
-                break
-
-            error_val: Optional[str] = None
-            reward_val = 0.0
-            done_val = False
-            action = TriageAction(action_type="wait", patient_id=-1)
-
-            try:
-                action = _select_action(client, step, result.observation, history)
-                result = await env.step(action)
-                last_obs = result.observation
-
-                reward_val = float(result.reward or 0.0)
-                done_val = bool(result.done)
-                error_meta = None
-                if getattr(result.observation, "metadata", None):
-                    error_meta = result.observation.metadata.get("last_action_error")
-                error_val = error_meta if error_meta else None
-            except Exception as exc:
-                reward_val = 0.0
-                done_val = True
-                error_val = str(exc)
-
-            rewards.append(reward_val)
-            steps_taken = step
-            log_step(
-                step=step,
-                action=_action_to_str(action),
-                reward=reward_val,
-                done=done_val,
-                error=error_val,
+        for task_name in tasks:
+            print(
+                f"[INFO] running baseline task={task_name} image={image_name} model={MODEL_NAME}",
+                flush=True,
             )
-            history.append(
-                json.dumps(
-                    {
-                        "step": step,
-                        "action": _action_to_str(action),
-                        "reward": round(reward_val, 2),
-                        "done": done_val,
-                    }
-                )
-            )
-
-            if done_val:
-                break
-
-        score = _compute_score(last_obs, rewards)
-        success = score >= SUCCESS_SCORE_THRESHOLD
+            summary.append(await _run_task(env=env, client=client, task_name=task_name))
 
     finally:
         try:
@@ -237,7 +270,25 @@ async def main() -> None:
             # Keep stdout contract strict: do not print non-[START|STEP|END] lines.
             pass
 
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+    average_score = sum(item["score"] for item in summary) / max(1, len(summary))
+    print(
+        json.dumps(
+            {
+                "benchmark": BENCHMARK,
+                "model": MODEL_NAME,
+                "tasks": summary,
+                "average_score": round(average_score, 4),
+                "reproducibility": {
+                    "temperature": TEMPERATURE,
+                    "max_tokens": MAX_TOKENS,
+                    "api_base_url": API_BASE_URL,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

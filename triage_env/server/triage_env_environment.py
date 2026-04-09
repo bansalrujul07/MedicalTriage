@@ -3,10 +3,10 @@ from uuid import uuid4
 from openenv.core.env_server.interfaces import Environment
 
 try:
-    from ..models import Patient, Resources, TriageAction, TriageObservation, TriageState
+    from ..models import Patient, Resources, TriageAction, TriageObservation, TriageReward, TriageState
     from ..tasks import TASK_CONFIGS, TaskConfig, resolve_task_name
 except ImportError:
-    from models import Patient, Resources, TriageAction, TriageObservation, TriageState
+    from models import Patient, Resources, TriageAction, TriageObservation, TriageReward, TriageState
     from tasks import TASK_CONFIGS, TaskConfig, resolve_task_name
 
 
@@ -84,6 +84,7 @@ class TriageEnvironment(Environment):
             step_count=self._state.step_count,
             done=False,
             reward=0.0,
+            reward_detail=TriageReward(value=0.0, components={}, penalties={}),
             message="Environment reset successfully",
             metadata=self._build_metadata(reward_breakdown={}),
         )
@@ -254,12 +255,24 @@ class TriageEnvironment(Environment):
 
         self._state.total_reward += reward
 
+        components = {
+            key: float(value)
+            for key, value in reward_breakdown.items()
+            if float(value) >= 0.0
+        }
+        penalties = {
+            key: float(value)
+            for key, value in reward_breakdown.items()
+            if float(value) < 0.0
+        }
+
         return TriageObservation(
             patients=self._state.patients,
             resources=self._state.resources,
             step_count=self._state.step_count,
             done=done,
             reward=reward,
+            reward_detail=TriageReward(value=float(reward), components=components, penalties=penalties),
             message=message,
             metadata=self._build_metadata(reward_breakdown=reward_breakdown),
         )

@@ -6,6 +6,11 @@ colorTo: blue
 sdk: docker
 app_port: 8000
 pinned: false
+tags:
+    - openenv
+    - fastapi
+    - healthcare
+    - reinforcement-learning
 ---
 
 # MedicalTriage
@@ -21,6 +26,17 @@ Difficulty is modeled through formal task configurations:
 - task3: high-pressure triage
 
 Detailed architecture notes are in [triage_env/docs/task_architecture.md](triage_env/docs/task_architecture.md).
+
+## Task Definitions and Difficulty
+
+- task1 (easy): baseline triage workflow with fewer patients and less severe deterioration.
+- task2 (medium): constrained resource allocation with tighter survival and stabilization targets.
+- task3 (hard): high-pressure triage with multiple critical patients and harsher penalties.
+
+Each task has deterministic programmatic graders in:
+- `graders/task1_grader.py`
+- `graders/task2_grader.py`
+- `graders/task3_grader.py`
 
 ## Installation
 
@@ -79,6 +95,14 @@ Each step returns an observation with:
 
 Metadata includes task name, reward breakdown, invalid action count, and resource usage.
 
+## Reward Schema
+
+The environment exposes both:
+- scalar `reward: float` per step
+- typed `reward_detail: TriageReward` payload for structured reward components
+
+See `triage_env/models.py` for `TriageReward` fields.
+
 ## Run Tests
 
 From repository root:
@@ -105,6 +129,27 @@ python -m triage_env.scripts.run_llm_agent --task task3
 ```
 
 If OPENAI_API_KEY is missing, LLMAgent runs with a safe fallback policy.
+
+## OpenAI Baseline Inference (All 3 Tasks)
+
+The repository baseline script uses the OpenAI API client and evaluates all tasks (`task1,task2,task3`) by default.
+
+Required env var:
+```bash
+export OPENAI_API_KEY=<your_openai_api_key>
+```
+
+Run baseline:
+```bash
+python inference.py
+```
+
+Reproducibility controls:
+- `TRIAGE_TASKS=task1,task2,task3`
+- `TRIAGE_TEMPERATURE=0.0`
+- `TRIAGE_MAX_TOKENS=220`
+
+The script prints per-task scores and an `average_score` JSON summary.
 
 ## Train Agents
 
@@ -142,6 +187,18 @@ python -m triage_env.scripts.run_benchmark --tasks task1 --agents RLAgent --outp
 
 CSV output:
 - triage_env/evaluation/results/benchmark_summary.csv
+
+## Baseline Scores
+
+Reference baseline metrics from `benchmark_final.csv` (3 episodes):
+
+| Task | Agent | Avg Total Reward | Survival Rate |
+|------|-------|------------------|---------------|
+| task1 | RuleBasedAgent | 250.92 | 1.00 |
+| task2 | TrainedQAgent | 221.63 | 0.75 |
+| task3 | RLAgent | 19.43 | 0.27 |
+
+To generate an OpenAI baseline score report for your own API key, run `python inference.py`.
 
 ## Server
 

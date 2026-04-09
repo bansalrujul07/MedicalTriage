@@ -1,4 +1,4 @@
-from typing import Dict, List, Literal
+from typing import Any, Dict, List, Literal
 from pydantic import BaseModel, Field
 
 
@@ -25,10 +25,17 @@ class TriageAction(BaseModel):
     patient_id: int = -1
 
 
+class TriageReward(BaseModel):
+    value: float
+    components: Dict[str, float] = Field(default_factory=dict)
+    penalties: Dict[str, float] = Field(default_factory=dict)
+
+
 class TriageObservation(BaseModel):
     done: bool
     reward: float
-    metadata: Dict = Field(default_factory=dict)
+    reward_detail: TriageReward | None = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     patients: List[Patient]
     resources: Resources
     step_count: int
