@@ -1,6 +1,6 @@
 import argparse
 import logging
-import os
+import sys
 
 from triage_env.agents.llm_agent import LLMAgent
 from triage_env.config import get_llm_config
@@ -9,7 +9,14 @@ from triage_env.evaluation.evaluator import run_single_episode
 from triage_env.server.triage_env_environment import TriageEnvironment
 
 
-logging.basicConfig(level=logging.INFO)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        stream=sys.stderr,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+LOGGER = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -20,14 +27,13 @@ def main() -> None:
     args = parser.parse_args()
 
     if not llm_config.api_key:
-        print("API_KEY is not set. LLMAgent may run in fallback mode.")
+        LOGGER.warning("API_KEY is not set. LLMAgent may run in fallback mode.")
     if not llm_config.base_url:
-        print("API_BASE_URL is not set. Requests may not route through the validator proxy.")
+        LOGGER.warning("API_BASE_URL is not set. Requests may not route through the validator proxy.")
 
     env = TriageEnvironment(task=args.task)
     metrics = run_single_episode(env, LLMAgent())
-    print("LLM agent episode metrics:")
-    print(metrics)
+    LOGGER.info("LLM agent episode metrics: %s", metrics)
 
 
 if __name__ == "__main__":

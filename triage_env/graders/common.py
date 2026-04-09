@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 import math
+import logging
 import os
+import multiprocessing as mp
 import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+
+from jsonschema import ValidationError, validate
 
 # Ensure triage_env package can be imported when graders are executed via file path.
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +19,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from triage_env.agents.random_agent import RandomAgent
 from triage_env.agents.rl_agents import RLAgent
+from triage_env.agents.base_agent import BaseAgent
 from triage_env.agents.rule_based_agent import RuleBasedAgent
 from triage_env.agents.trained_q_agent import TrainedQAgent
 from triage_env.evaluation.evaluator import evaluate_agent
@@ -23,6 +28,68 @@ from triage_env.tasks import TASK_CONFIGS, TASK_TARGETS
 
 GRADER_VERSION = "v2.2"  # Updated version
 SCORE_EPSILON = 0.001
+GRADE_TIMEOUT_SECONDS = float(os.getenv("TRIAGE_GRADE_TIMEOUT_SECONDS", "300"))
+
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=os.getenv("TRIAGE_LOG_LEVEL", "INFO").upper(),
+        stream=sys.stderr,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+LOGGER = logging.getLogger(__name__)
+
+_RESULT_SCHEMA = {
+    "type": "object",
+    "required": ["grader_version", "task", "task_id", "episodes", "score", "reward", "score_range", "components", "signals", "summary"],
+    "properties": {
+        "grader_version": {"type": "string"},
+        "task": {"type": "string"},
+        "task_id": {"type": "string"},
+        "episodes": {"type": "integer", "minimum": 1},
+        "score": {"type": "number", "minimum": SCORE_EPSILON, "maximum": 1.0 - SCORE_EPSILON},
+        "reward": {"type": "number"},
+        "score_range": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 2,
+            "maxItems": 2,
+        },
+        "components": {"type": "object"},
+        "signals": {"type": "object"},
+        "summary": {"type": "object"},
+    },
+}
+
+
+class SafeAgent(BaseAgent):
+    def __init__(self, wrapped_agent: BaseAgent):
+        self._wrapped_agent = wrapped_agent
+
+    @property
+    def name(self) -> str:
+        return getattr(self._wrapped_agent, "name", self._wrapped_agent.__class__.__name__)
+
+    def reset(self):
+        try:
+            reset = getattr(self._wrapped_agent, "reset", None)
+            if callable(reset):
+                reset()
+        except Exception:
+            LOGGER.exception("SafeAgent reset failed; continuing")
+
+    def act(self, observation):
+        try:
+            return self._wrapped_agent.act(observation)
+        except Exception:
+            LOGGER.exception("Wrapped agent crashed; returning safe wait action")
+            return _safe_wait_action()
+
+
+def _safe_wait_action():
+    from triage_env.models import TriageAction
+
+    return TriageAction(action_type="wait", patient_id=-1)
 
 
 def _resolve_existing_path(candidates: list[Path]) -> Path | None:
@@ -30,6 +97,106 @@ def _resolve_existing_path(candidates: list[Path]) -> Path | None:
         if candidate.exists():
             return candidate
     return None
+
+
+def _fallback_grade(task_name: str, episodes: int, reason: str) -> dict[str, Any]:
+    safe_score = _clip_open_01(0.5)
+    return {
+        "grader_version": GRADER_VERSION,
+        "status": "error",
+        "task": task_name,
+        "task_id": task_name,
+        "episodes": episodes,
+        "score": safe_score,
+        "reward": safe_score,
+        "score_range": [0.0, 1.0],
+        "components": {
+            "rollout_achievement": safe_score,
+            "safety_errors": safe_score,
+            "efficiency": safe_score,
+            "task_specific": safe_score,
+        },
+        "signals": {
+            "fallback": 1.0,
+            "error": reason,
+        },
+        "summary": {
+            "task": task_name,
+            "fallback_reason": reason,
+            "success_rate": safe_score,
+            "survival_rate": safe_score,
+            "critical_survival_rate": safe_score,
+            "avg_total_reward": safe_score,
+        },
+    }
+
+
+def _validate_result_schema(result: dict[str, Any]) -> dict[str, Any]:
+    try:
+        validate(instance=result, schema=_RESULT_SCHEMA)
+        return result
+    except ValidationError as exc:
+        LOGGER.error("Grader result failed schema validation: %s", exc)
+        return _fallback_grade(result.get("task", "unknown"), int(result.get("episodes", 1)), f"schema:{exc}")
+
+
+def _grade_task_impl(task_name: str, episodes: int) -> dict[str, Any]:
+    if task_name not in TASK_CONFIGS:
+        raise ValueError(f"Unsupported task: {task_name}")
+
+    task_config = TASK_CONFIGS[task_name]
+    agent, agent_meta = _build_evaluated_agent(task_name)
+    agent = SafeAgent(agent)
+    summary, _ = evaluate_agent(
+        env_class=TriageEnvironment,
+        agent=agent,
+        task=task_name,
+        num_episodes=episodes,
+        max_steps=task_config.max_steps,
+    )
+
+    components = _compute_components(task_name, summary)
+    final_score = _compute_final_score(components)
+
+    return {
+        "grader_version": GRADER_VERSION,
+        "task": task_name,
+        "task_id": task_name,
+        "episodes": episodes,
+        "score": final_score,
+        "reward": final_score,
+        "score_range": [0.0, 1.0],
+        "components": {
+            "rollout_achievement": components["rollout_achievement"],
+            "safety_errors": components["safety_errors"],
+            "efficiency": components["efficiency"],
+            "task_specific": components["task_specific"],
+        },
+        "signals": {
+            "selected_agent": agent_meta.get("selected_agent"),
+            "selected_checkpoint": agent_meta.get("checkpoint"),
+            "selection_reason": agent_meta.get("selection_reason"),
+            "survival_rate": components["survival_rate"],
+            "critical_survival_rate": components["critical_survival_rate"],
+            "success_rate": components["success_rate"],
+            "reward_norm": components["reward_norm"],
+            "invalid_rate": components["invalid_rate"],
+            "stabilization_threshold": components["stabilization_threshold"],
+        },
+        "summary": summary,
+    }
+
+
+def _grade_task_worker(task_name: str, episodes: int, result_queue):
+    try:
+        result_queue.put(_validate_result_schema(_grade_task_impl(task_name, episodes)))
+    except Exception as exc:  # pragma: no cover
+        err = {
+            "type": type(exc).__name__,
+            "message": str(exc),
+            "traceback": "",
+        }
+        result_queue.put(_fallback_grade(task_name, episodes, json.dumps(err, ensure_ascii=True)))
 
 
 def _build_evaluated_agent(task_name: str):
@@ -270,86 +437,38 @@ def _compute_final_score(components: dict[str, float]) -> float:
 
 
 def grade_task(task_name: str, episodes: int = 1) -> dict[str, Any]:
+    ctx = mp.get_context("spawn")
+    result_queue = ctx.Queue(maxsize=1)
+    process = ctx.Process(target=_grade_task_worker, args=(task_name, episodes, result_queue), daemon=True)
+
     try:
-        if task_name not in TASK_CONFIGS:
-            raise ValueError(f"Unsupported task: {task_name}")
+        process.start()
+        process.join(timeout=GRADE_TIMEOUT_SECONDS)
 
-        task_config = TASK_CONFIGS[task_name]
-        agent, agent_meta = _build_evaluated_agent(task_name)
-        summary, _ = evaluate_agent(
-            env_class=TriageEnvironment,
-            agent=agent,
-            task=task_name,
-            num_episodes=episodes,
-            max_steps=task_config.max_steps,
-        )
+        if process.is_alive():
+            LOGGER.error("Grader timed out after %.1f seconds for task %s", GRADE_TIMEOUT_SECONDS, task_name)
+            process.terminate()
+            process.join(timeout=5)
+            return _fallback_grade(task_name, episodes, f"timeout:{GRADE_TIMEOUT_SECONDS}")
 
-        components = _compute_components(task_name, summary)
-        final_score = _compute_final_score(components)
+        if result_queue.empty():
+            return _fallback_grade(task_name, episodes, "no-result-from-worker")
 
-        return {
-            "grader_version": GRADER_VERSION,
-            "task": task_name,
-            "task_id": task_name,
-            "episodes": episodes,
-            "score": final_score,
-            "reward": final_score,
-            "score_range": [0.0, 1.0],
-            "components": {
-                "rollout_achievement": components["rollout_achievement"],
-                "safety_errors": components["safety_errors"],
-                "efficiency": components["efficiency"],
-                "task_specific": components["task_specific"],
-            },
-            "signals": {
-                "selected_agent": agent_meta.get("selected_agent"),
-                "selected_checkpoint": agent_meta.get("checkpoint"),
-                "selection_reason": agent_meta.get("selection_reason"),
-                "survival_rate": components["survival_rate"],
-                "critical_survival_rate": components["critical_survival_rate"],
-                "success_rate": components["success_rate"],
-                "reward_norm": components["reward_norm"],
-                "invalid_rate": components["invalid_rate"],
-                "stabilization_threshold": components["stabilization_threshold"],
-            },
-            "summary": summary,
-        }
+        result = result_queue.get_nowait()
+        return _validate_result_schema(result)
 
-    except Exception as e:
-        print(f"❌ grade_task EXCEPTION: {type(e).__name__}: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-        
-        safe_score = 0.5
-        
-        # ✅ FIX 3: Restore full component/summary shape (audit: 'weakened schema')
-        return {
-            "grader_version": GRADER_VERSION,
-            "task": task_name,
-            "task_id": task_name,
-            "episodes": episodes,
-            "score": safe_score,
-            "reward": safe_score,
-            "score_range": [0.0, 1.0],
-            "components": {
-                "rollout_achievement": 0.5,
-                "safety_errors": 0.5,
-                "efficiency": 0.5,
-                "task_specific": 0.5,
-            },
-            "signals": {
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-                "status": "fallback_safe_mode",
-                "survival_rate": 0.5,
-                "critical_survival_rate": 0.5,
-                "success_rate": 0.5,
-                "reward_norm": 0.5,
-                "invalid_rate": 0.0,
-                "stabilization_threshold": 0.5,
-            },
-            "summary": {"status": "fallback", "error": str(e)}
-        }
+    except Exception as exc:  # pragma: no cover
+        LOGGER.exception("Unexpected grader failure for task %s", task_name)
+        return _fallback_grade(task_name, episodes, f"{type(exc).__name__}:{exc}")
+    finally:
+        try:
+            result_queue.close()
+        except Exception:
+            pass
+        try:
+            result_queue.join_thread()
+        except Exception:
+            pass
 
 
 def print_grader_result(result: dict[str, Any]) -> None:

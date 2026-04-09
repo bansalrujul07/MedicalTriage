@@ -165,18 +165,10 @@ def find_docker_context(repo_dir: Path) -> tuple[Path, Path] | None:
 
 
 def find_openenv_dir(repo_dir: Path) -> Path | None:
-    """Find the directory containing openenv.yaml by checking common locations."""
-    # Check root first
+    """Find the directory containing the single source-of-truth openenv.yaml."""
     if (repo_dir / "openenv.yaml").exists():
         return repo_dir
-    
-    # Check common subdirectories
-    for subdir in ["triage_env", "env", "environment", "server"]:
-        candidate = repo_dir / subdir
-        if (candidate / "openenv.yaml").exists():
-            return candidate
-    
-    # If not found, return None
+
     return None
 
 
@@ -225,8 +217,8 @@ def check_step3_openenv_validate(repo_dir: Path) -> None:
     # Find the actual OpenEnv environment directory
     env_dir = find_openenv_dir(repo_dir)
     if env_dir is None:
-        fail_msg("openenv.yaml not found in repo or common subdirectories (triage_env, env, environment, server)")
-        hint(f"Make sure openenv.yaml is in {repo_dir} or a subdirectory like {repo_dir}/triage_env/")
+        fail_msg("openenv.yaml not found at repository root")
+        hint(f"Make sure openenv.yaml is in {repo_dir}")
         stop_at("Step 3")
 
     log(f"  Found openenv.yaml in: {env_dir}")
