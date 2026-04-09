@@ -20,7 +20,7 @@ except ModuleNotFoundError:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Grade task2 for MedicalTriage")
-    parser.add_argument("--episodes", type=int, default=1)
+    parser.add_argument("--episodes", type=int, default=3)
     args = parser.parse_args()
 
     print_grader_result(grade_task("task2", episodes=args.episodes))
