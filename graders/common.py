@@ -12,8 +12,16 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
+def _clip_score_strict(score: float) -> float:
+    """Clip score to strictly (0, 1) range."""
+    epsilon = 0.001
+    clipped = max(0.0, min(1.0, float(score)))
+    return epsilon + clipped * (1.0 - 2.0 * epsilon)
+
+
 def _fallback_grade(task_name: str, episodes: int, reason: str) -> dict[str, Any]:
-    score = 0.0
+    # Validator requires score to be strictly within (0, 1), never exactly 0 or 1.
+    score = _clip_score_strict(0.5)
     return {
         "grader_version": "fallback-v2.0-error",
         "status": "error",

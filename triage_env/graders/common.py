@@ -22,6 +22,7 @@ from triage_env.tasks import TASK_CONFIGS, TASK_TARGETS
 
 
 GRADER_VERSION = "v2.0"
+SCORE_EPSILON = 0.001
 
 
 def _resolve_existing_path(candidates: list[Path]) -> Path | None:
@@ -153,6 +154,12 @@ def _clip_01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
+def _clip_open_01(value: float) -> float:
+    # Map [0, 1] into (eps, 1-eps) so we never return exact boundaries.
+    clipped = _clip_01(value)
+    return SCORE_EPSILON + clipped * (1.0 - 2.0 * SCORE_EPSILON)
+
+
 def _mean(*values: float) -> float:
     filtered = [float(v) for v in values]
     if not filtered:
@@ -251,7 +258,8 @@ def _compute_final_score(components: dict[str, float]) -> float:
         + components["efficiency"] * 0.20
         + components["task_specific"] * 0.15
     )
-    return _clip_01(score)
+    # Submission validator requires strict bounds: 0 < score < 1.
+    return _clip_open_01(score)
 
 
 def grade_task(task_name: str, episodes: int = 20) -> dict[str, Any]:
