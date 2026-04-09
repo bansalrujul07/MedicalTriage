@@ -29,15 +29,21 @@ from triage_env.tasks import TASK_CONFIGS, TASK_TARGETS
 GRADER_VERSION = "v2.2"  # Updated version
 SCORE_EPSILON = 0.001
 GRADE_TIMEOUT_SECONDS = float(os.getenv("TRIAGE_GRADE_TIMEOUT_SECONDS", "300"))
+CONFIGURE_ROOT_LOGGER = os.getenv("TRIAGE_GRADER_CONFIGURE_ROOT_LOGGER", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
-if not logging.getLogger().handlers:
+LOGGER = logging.getLogger(__name__)
+
+if CONFIGURE_ROOT_LOGGER and not logging.getLogger().handlers:
     logging.basicConfig(
         level=os.getenv("TRIAGE_LOG_LEVEL", "INFO").upper(),
         stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-
-LOGGER = logging.getLogger(__name__)
 
 _RESULT_SCHEMA = {
     "type": "object",

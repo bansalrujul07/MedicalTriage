@@ -27,6 +27,7 @@ class LLMAgent(BaseAgent):
         self,
         llm_callable: Callable[[str, str], str] | None = None,
         config: LLMConfig | None = None,
+        sleep_fn: Callable[[float], None] | None = None,
     ):
         self.config = config or get_llm_config()
         self.llm_callable = llm_callable
@@ -34,6 +35,7 @@ class LLMAgent(BaseAgent):
         self._missing_key_warned = False
         self._max_attempts = max(1, int(os.getenv("TRIAGE_LLM_RETRIES", "3")))
         self._retry_delay_seconds = max(0.0, float(os.getenv("TRIAGE_LLM_RETRY_DELAY", "0.5")))
+        self._sleep_fn = sleep_fn or time.sleep
         # In validator context, never silently degrade to non-LLM behavior.
         self._strict_proxy_mode = bool(
             os.getenv("API_KEY", "").strip() or os.getenv("API_BASE_URL", "").strip()
@@ -108,7 +110,7 @@ class LLMAgent(BaseAgent):
                 sleep_seconds = min(self._retry_delay_seconds * (2 ** (attempt - 1)), 5.0)
                 LOGGER.warning("OpenAI request attempt %s/%s failed: %s; retrying in %.2fs", attempt, self._max_attempts, exc, sleep_seconds)
                 if sleep_seconds > 0:
-                    time.sleep(sleep_seconds)
+                    self._sleep_fn(sleep_seconds)
             except Exception as exc:  # pragma: no cover
                 last_exc = exc
                 break

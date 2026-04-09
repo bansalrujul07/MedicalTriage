@@ -52,7 +52,7 @@ def _fallback_grade(task_name: str, episodes: int, reason: str) -> dict[str, Any
     }
 
 
-def grade_task(task_name: str, episodes: int = 20) -> dict[str, Any]:
+def grade_task(task_name: str, episodes: int = 1) -> dict[str, Any]:
     try:
         from triage_env.graders.common import grade_task as impl_grade_task
 

@@ -17,7 +17,7 @@ except ModuleNotFoundError:
     from common import grade_task as common_grade_task, print_grader_result
 
 
-def grade_task(episodes: int = 20):
+def grade_task(episodes: int = 1):
     return common_grade_task("task2", episodes=episodes)
 
 

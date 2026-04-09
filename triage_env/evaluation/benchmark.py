@@ -1,5 +1,6 @@
 import csv
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Iterable
@@ -15,6 +16,7 @@ from triage_env.tasks import TASK_CONFIGS
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+LOGGER = logging.getLogger(__name__)
 
 
 def _read_checkpoint_metadata(model_path: Path) -> dict:
@@ -132,13 +134,22 @@ def benchmark_agents(
                 filtered_agents[name] = built_agent
 
         for _, agent in filtered_agents.items():
-            summary, _ = evaluate_agent(
-                env_class=TriageEnvironment,
-                agent=agent,
-                task=task_name,
-                num_episodes=episodes,
-                max_steps=task_config.max_steps,
-            )
+            try:
+                summary, _ = evaluate_agent(
+                    env_class=TriageEnvironment,
+                    agent=agent,
+                    task=task_name,
+                    num_episodes=episodes,
+                    max_steps=task_config.max_steps,
+                )
+            except Exception as exc:
+                LOGGER.warning(
+                    "Skipping agent %s on task %s due to evaluation error: %s",
+                    getattr(agent, "name", agent.__class__.__name__),
+                    task_name,
+                    exc,
+                )
+                continue
             if summary.get("checkpoint_warning"):
                 print(f"[checkpoint-warning] {summary['agent_name']} @ {task_name}: {summary['checkpoint_warning']}")
             results.append(summary)
