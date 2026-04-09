@@ -130,13 +130,21 @@ python -m triage_env.scripts.run_llm_agent --task task3
 
 If OPENAI_API_KEY is missing, LLMAgent runs with a safe fallback policy.
 
-## OpenAI Baseline Inference (All 3 Tasks)
+## OpenAI Baseline Inference (Submission Format)
 
-The repository baseline script uses the OpenAI API client and evaluates all tasks (`task1,task2,task3`) by default.
+The root `inference.py` script uses the OpenAI client and emits strict stdout logs for one task run.
 
-Required env var:
+Required env vars:
 ```bash
-export OPENAI_API_KEY=<your_openai_api_key>
+export HF_TOKEN=<your_api_key>
+export LOCAL_IMAGE_NAME=medicaltriage:latest
+```
+
+Optional (with defaults in script):
+```bash
+export API_BASE_URL=https://router.huggingface.co/v1
+export MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
+export TRIAGE_TASK=task3
 ```
 
 Run baseline:
@@ -144,12 +152,12 @@ Run baseline:
 python inference.py
 ```
 
-Reproducibility controls:
-- `TRIAGE_TASKS=task1,task2,task3`
-- `TRIAGE_TEMPERATURE=0.0`
-- `TRIAGE_MAX_TOKENS=220`
+Stdout format is restricted to:
+- `[START] ...`
+- `[STEP] ...`
+- `[END] ...`
 
-The script prints per-task scores and an `average_score` JSON summary.
+The final score emitted in `[END]` is normalized to `[0, 1]`.
 
 ## Train Agents
 
@@ -198,7 +206,7 @@ Reference baseline metrics from `benchmark_final.csv` (3 episodes):
 | task2 | TrainedQAgent | 221.63 | 0.75 |
 | task3 | RLAgent | 19.43 | 0.27 |
 
-To generate an OpenAI baseline score report for your own API key, run `python inference.py`.
+To generate a submission-format baseline run, set `HF_TOKEN` and execute `python inference.py`.
 
 ## Server
 

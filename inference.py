@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 from typing import List, Optional
 
@@ -10,17 +9,13 @@ from triage_env.client import TriageEnv
 from triage_env.models import TriageAction, TriageObservation
 
 # Required by challenge spec
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
-LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
-DOCKER_IMAGE_NAME = os.getenv("DOCKER_IMAGE_NAME")
-IMAGE_NAME = os.getenv("IMAGE_NAME")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "").strip()
 
 # Environment/task controls
-TASKS_ENV = os.getenv("TRIAGE_TASKS", "task1,task2,task3")
-SINGLE_TASK = os.getenv("TRIAGE_TASK", os.getenv("MY_ENV_V4_TASK", "")).strip()
+TASK_NAME = os.getenv("TRIAGE_TASK", os.getenv("MY_ENV_V4_TASK", "task3")).strip()
 BENCHMARK = os.getenv("TRIAGE_BENCHMARK", "medicaltriage")
 MAX_STEPS = int(os.getenv("TRIAGE_MAX_STEPS", "28"))
 TEMPERATURE = float(os.getenv("TRIAGE_TEMPERATURE", "0.0"))
@@ -124,54 +119,14 @@ def _compute_score(last_obs: Optional[TriageObservation], rewards: List[float]) 
     return min(max(score, 0.0), 1.0)
 
 
-def _candidate_image_names() -> List[str]:
-    """Return likely local Docker image names in priority order."""
-    candidates = [
-        LOCAL_IMAGE_NAME,
-        DOCKER_IMAGE_NAME,
-        IMAGE_NAME,
-        "medicaltriage:latest",
-        "medicaltriage:ci",
-        "medicaltriage",
-        "triage-env:latest",
-    ]
-    return [candidate for candidate in candidates if candidate]
-
-
 async def _connect_environment() -> tuple[TriageEnv, str]:
-    """Connect to the first available local Docker image."""
-    last_error: Exception | None = None
-
-    for candidate in _candidate_image_names():
-        try:
-            env = await TriageEnv.from_docker_image(candidate)
-            return env, candidate
-        except Exception as exc:  # pragma: no cover - depends on local docker availability
-            last_error = exc
-
-    if last_error is not None:
-        raise SystemExit(
-            "Unable to start a local OpenEnv container. Set LOCAL_IMAGE_NAME or build a supported image tag "
-            "such as medicaltriage:latest. Last error: " + str(last_error)
-        ) from last_error
-
-    raise SystemExit(
-        "Unable to start a local OpenEnv container. Set LOCAL_IMAGE_NAME or build a supported image tag "
-        "such as medicaltriage:latest."
-    )
+    if not LOCAL_IMAGE_NAME:
+        raise SystemExit("LOCAL_IMAGE_NAME is required")
+    env = await TriageEnv.from_docker_image(LOCAL_IMAGE_NAME)
+    return env, LOCAL_IMAGE_NAME
 
 
-def _resolve_tasks() -> List[str]:
-    if SINGLE_TASK:
-        return [SINGLE_TASK]
-
-    raw = [part.strip() for part in TASKS_ENV.split(",") if part.strip()]
-    allowed = {"task1", "task2", "task3"}
-    tasks = [task for task in raw if task in allowed]
-    return tasks or ["task1", "task2", "task3"]
-
-
-async def _run_task(env: TriageEnv, client: OpenAI, task_name: str) -> dict:
+async def _run_task(env: TriageEnv, client: OpenAI, task_name: str) -> tuple[bool, int, float, List[float]]:
     rewards: List[float] = []
     history: List[str] = []
     steps_taken = 0
@@ -236,59 +191,33 @@ async def _run_task(env: TriageEnv, client: OpenAI, task_name: str) -> dict:
     success = score >= SUCCESS_SCORE_THRESHOLD
     log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
-    return {
-        "task": task_name,
-        "score": round(score, 4),
-        "steps": steps_taken,
-        "success": success,
-        "model": MODEL_NAME,
-    }
+    return success, steps_taken, score, rewards
 
 
 async def main() -> None:
-    api_key = OPENAI_API_KEY or HF_TOKEN
-    if not api_key:
-        raise SystemExit("OPENAI_API_KEY is required")
+    if not HF_TOKEN:
+        raise SystemExit("HF_TOKEN is required")
 
-    client = OpenAI(base_url=API_BASE_URL, api_key=api_key)
-    env, image_name = await _connect_environment()
-    tasks = _resolve_tasks()
-    summary: List[dict] = []
+    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+    env: TriageEnv | None = None
+    success = False
+    steps_taken = 0
+    score = 0.0
+    rewards: List[float] = []
 
     try:
-        for task_name in tasks:
-            print(
-                f"[INFO] running baseline task={task_name} image={image_name} model={MODEL_NAME}",
-                flush=True,
-            )
-            summary.append(await _run_task(env=env, client=client, task_name=task_name))
+        env, _ = await _connect_environment()
+        success, steps_taken, score, rewards = await _run_task(env=env, client=client, task_name=TASK_NAME)
 
     finally:
-        try:
-            await env.close()
-        except Exception:
-            # Keep stdout contract strict: do not print non-[START|STEP|END] lines.
-            pass
-
-    average_score = sum(item["score"] for item in summary) / max(1, len(summary))
-    print(
-        json.dumps(
-            {
-                "benchmark": BENCHMARK,
-                "model": MODEL_NAME,
-                "tasks": summary,
-                "average_score": round(average_score, 4),
-                "reproducibility": {
-                    "temperature": TEMPERATURE,
-                    "max_tokens": MAX_TOKENS,
-                    "api_base_url": API_BASE_URL,
-                },
-            },
-            indent=2,
-            sort_keys=True,
-        ),
-        flush=True,
-    )
+        if env is not None:
+            try:
+                await env.close()
+            except Exception:
+                pass
+        # Always emit END exactly once, even if an exception happens before steps.
+        if steps_taken == 0:
+            log_end(success=success, steps=steps_taken, score=max(0.0, min(1.0, score)), rewards=rewards)
 
 
 if __name__ == "__main__":
