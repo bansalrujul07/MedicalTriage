@@ -18,7 +18,7 @@ if _env_path.exists():
 # Required by challenge spec
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
+API_KEY = os.getenv("API_KEY", "").strip() or os.getenv("HF_TOKEN", "").strip()
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "medicaltriage:latest").strip()
 
 # Environment/task controls
@@ -132,7 +132,7 @@ async def _connect_environment() -> tuple[TriageEnv, str]:
         image_name = "medicaltriage:latest"
     else:
         image_name = LOCAL_IMAGE_NAME.strip()
-    
+
     env = await TriageEnv.from_docker_image(image_name)
     return env, image_name
 
@@ -203,10 +203,10 @@ async def main() -> None:
     rewards: List[float] = []
 
     try:
-        if not HF_TOKEN:
-            raise RuntimeError("HF_TOKEN is required")
+        if not API_KEY:
+            raise RuntimeError("API_KEY is required")
 
-        client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+        client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
         env, _ = await _connect_environment()
         success, steps_taken, score, rewards = await _run_task(env=env, client=client, task_name=TASK_NAME)
     except Exception:
