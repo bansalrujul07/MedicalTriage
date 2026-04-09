@@ -34,6 +34,13 @@ class RLAgent(BaseAgent):
     def _state_key(self, observation: TriageObservation):
         return encode_observation(observation)
 
+    def _freeze_json_value(self, value):
+        if isinstance(value, list):
+            return tuple(self._freeze_json_value(item) for item in value)
+        if isinstance(value, dict):
+            return tuple(sorted((k, self._freeze_json_value(v)) for k, v in value.items()))
+        return value
+
     def _valid_actions(self, observation: TriageObservation):
         alive = [p for p in observation.patients if p.alive]
         actions = [("wait", -1)]
@@ -143,8 +150,8 @@ class RLAgent(BaseAgent):
 
         self.q_table = {}
         for state_str, actions in data["q_table"].items():
-            state = tuple(json.loads(state_str))
+            state = self._freeze_json_value(json.loads(state_str))
             self.q_table[state] = {}
             for action_str, value in actions.items():
-                action = tuple(json.loads(action_str))
+                action = self._freeze_json_value(json.loads(action_str))
                 self.q_table[state][action] = float(value)

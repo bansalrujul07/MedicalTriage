@@ -41,6 +41,7 @@ dist/
 #Environment variables
 triage_env/training/*.pkl
 triage_env/training/*.meta.json
+triage_env/training/triage_rl_qtable*.json
 !triage_env/training/q_agent.pkl
 !triage_env/training/q_agent_task1.pkl
 !triage_env/training/q_agent_task2.pkl

@@ -55,8 +55,9 @@ Default manifests:
 - `deployment/k8s/deployment.yaml`
 - `deployment/k8s/service.yaml`
 
-## 6) CI Readiness Workflow
-A baseline CI workflow exists at:
-- `.github/workflows/deploy-readiness.yml`
-
-It runs tests and Docker build on push/PR.
+## 6) Manual Readiness Check
+Run local tests and image build before release:
+```bash
+python -m pytest -q
+docker build -t medicaltriage:ci .
+```

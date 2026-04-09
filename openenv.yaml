@@ -23,7 +23,7 @@ tasks:
     grader_command: python graders/task1_grader.py
     grader_path: graders/task1_grader.py
     grader_file: graders/task1_grader.py
-    grader_legacy_path: graders/task1_grader.py
+    grader_legacy_path: graders/task1.py
     graders:
       - type: python
         name: default
@@ -40,7 +40,7 @@ tasks:
     grader_command: python graders/task2_grader.py
     grader_path: graders/task2_grader.py
     grader_file: graders/task2_grader.py
-    grader_legacy_path: graders/task2_grader.py
+    grader_legacy_path: graders/task2.py
     graders:
       - type: python
         name: default
@@ -57,7 +57,7 @@ tasks:
     grader_command: python graders/task3_grader.py
     grader_path: graders/task3_grader.py
     grader_file: graders/task3_grader.py
-    grader_legacy_path: graders/task3_grader.py
+    grader_legacy_path: graders/task3.py
     graders:
       - type: python
         name: default
