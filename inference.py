@@ -215,7 +215,11 @@ async def main() -> None:
             raise RuntimeError("API_KEY is required")
 
         client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-        _proxy_ping_call(client)
+        try:
+            _proxy_ping_call(client)
+        except Exception:
+            # Keep running so we still attempt LLM calls during episode steps.
+            pass
         env, _ = await _connect_environment()
         success, steps_taken, score, rewards = await _run_task(env=env, client=client, task_name=TASK_NAME)
     except Exception:

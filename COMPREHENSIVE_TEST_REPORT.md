@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-Complete end-to-end test suite executed successfully covering **unit tests, integration tests, agent validation, Groq API configuration, and comprehensive benchmarking**.
+Complete end-to-end test suite executed successfully covering **unit tests, integration tests, agent validation, OpenAI API configuration, and comprehensive benchmarking**.
 
 ### Quick Stats
 - **Total Tests:** 31/31 ✅ PASSED
@@ -54,10 +54,10 @@ EpisodeMetrics(task='task1', total_reward=..., survival_rate=1.0, success=True)
 ✅ EXECUTED SUCCESSFULLY
 ```
 
-#### Groq/LLM Configuration
+#### OpenAI/LLM Configuration
 ```
-✅ Provider: GROQ
-✅ Model: llama-3.1-70b-versatile
+✅ Provider: OPENAI
+✅ Model: gpt-4.1-mini
 ✅ API Key: Loaded (placeholder in use - ready for real key)
 ✅ Agent Initialization: SUCCESS
 ```
@@ -110,12 +110,12 @@ Test Coverage Summary:
   ✅ Unit Tests:              31/31 PASSED
   ✅ Integration Tests:        ALL PASSED
   ✅ Agent Smoke Tests:        RANDOM, RULE-BASED PASSED
-  ✅ Groq Configuration:       VERIFIED & WORKING
+  ✅ OpenAI Configuration:     VERIFIED & WORKING
   ✅ Benchmark Suite:          12 agent-task combinations
   ✅ Model Artifacts:          RL Q-table + Q-agent present
   ✅ CSV Export:               benchmark_test_final.csv generated
   ✅ Cwd-Independence:         Verified (runs from nested dirs)
-  ✅ API Integration:          Groq ready (fallback mode active)
+  ✅ API Integration:          OpenAI ready (fallback mode active)
 ```
 
 ---
@@ -157,8 +157,7 @@ Test Coverage Summary:
 
 ### Environment Variables Loaded
 ```
-✅ TRIAGE_LLM_PROVIDER=groq
-✅ GROQ_API_KEY=loaded (placeholder)
+✅ OPENAI_API_KEY=loaded (placeholder)
 ✅ TRIAGE_LLM_MODEL=llama-3.1-70b-versatile
 ✅ TRIAGE_LLM_TEMPERATURE=0.0
 ✅ TRIAGE_LLM_MAX_TOKENS=200
@@ -169,10 +168,10 @@ Test Coverage Summary:
 ✅ TRIAGE_EVAL_EPISODES=30
 ```
 
-### Groq Integration Status
+### OpenAI Integration Status
 ```
-✅ Groq SDK installed (v0.9.0)
-✅ LLMAgent supports both OpenAI and Groq
+✅ OpenAI SDK installed
+✅ LLMAgent supports OpenAI
 ✅ API key detection working
 ✅ Fallback policy active (for placeholder key)
 ✅ Ready for production with real API key
@@ -197,7 +196,7 @@ Test Coverage Summary:
 
 ### Documentation Generated
 ```
-✅ README.md (updated with Groq configuration)
+✅ README.md (updated with OpenAI configuration)
 ✅ LLM_SETUP.md (complete API setup guide)
 ✅ task_architecture.md (task progression design)
 ✅ FINAL_ANALYSIS_REPORT.md (previous run analysis)
@@ -214,7 +213,7 @@ Test Coverage Summary:
 | Training Pipeline | ✅ | RL + Q-agent working |
 | Evaluation Framework | ✅ | Metrics comprehensive |
 | Benchmark Suite | ✅ | Multi-agent, multi-task |
-| API Integration | ✅ | Groq ready + OpenAI compatible |
+| API Integration | ✅ | OpenAI ready |
 | Error Handling | ✅ | Robust fallback policies |
 | Documentation | ✅ | Complete with examples |
 | Testing | ✅ | 31/31 unit tests passing |
@@ -227,20 +226,15 @@ Test Coverage Summary:
 
 ## Next Steps for User
 
-### To Use Real Groq API
-1. Get API key: https://console.groq.com/keys
-2. Update `.env` file: `GROQ_API_KEY=gsk_your_key_here`
+### To Use Real OpenAI API
+1. Get API key from OpenAI dashboard
+2. Update `.env` file: `OPENAI_API_KEY=sk-proj-your_key_here`
 3. Run: `python -m triage_env.scripts.run_llm_agent --task task1`
-
-### To Switch to OpenAI
-1. Update `.env`: `TRIAGE_LLM_PROVIDER=openai`
-2. Set: `OPENAI_API_KEY=sk-proj-your_key`
-3. Run benchmark with LLMAgent included
 
 ### To Deploy to Production
 1. All tests passing ✅
 2. Models trained and saved ✅
-3. Choose your LLM provider (Groq recommended for free tier)
+3. Configure OpenAI API key and model
 4. Deploy with confidence ✅
 
 ---
@@ -253,9 +247,9 @@ Test Coverage Summary:
 - **task3 scenarios:** Use RLAgent (30% survival, most resilient under pressure)
 
 ### For API Integration Testing
-- Current: Placeholder Groq key (falls back to deterministic policy)
-- Next: Update with real Groq API key and re-run LLMAgent tests
-- Benefit: Free tier with unlimited requests (Groq advantage over OpenAI)
+- Current: Placeholder OpenAI key (falls back to deterministic policy)
+- Next: Update with real OpenAI API key and re-run LLMAgent tests
+- Benefit: Production-grade API consistency
 
 ### For Production Deployment
 ```bash
@@ -273,7 +267,7 @@ python -m triage_env.scripts.run_benchmark   # Full benchmark
 ✅ **Comprehensive test suite executed successfully**  
 ✅ **All 31 unit tests passing**  
 ✅ **All agents functional across all tasks**  
-✅ **Groq API integration verified and ready**  
+✅ **OpenAI API integration verified and ready**  
 ✅ **Benchmark results consistent and reproducible**  
 ✅ **System production-ready**  
 

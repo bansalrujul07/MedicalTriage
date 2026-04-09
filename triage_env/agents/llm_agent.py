@@ -77,7 +77,7 @@ class LLMAgent(BaseAgent):
             if self._strict_proxy_mode:
                 raise RuntimeError("OpenAI client is not initialized in strict proxy mode")
             if not self._missing_key_warned:
-                LOGGER.warning("%s API key missing; LLMAgent using fallback policy", self.config.provider.upper())
+                LOGGER.warning("OpenAI API key missing; LLMAgent using fallback policy")
                 self._missing_key_warned = True
             return None
 
@@ -93,13 +93,13 @@ class LLMAgent(BaseAgent):
                 ],
             )
 
-            LOGGER.info("%s API call succeeded", self.config.provider.upper())
+            LOGGER.info("OpenAI API call succeeded")
             content = response.choices[0].message.content
             return content or None
         except Exception as exc:  # pragma: no cover
             if self._strict_proxy_mode:
                 raise
-            LOGGER.warning("%s request failed: %s", self.config.provider.upper(), exc)
+            LOGGER.warning("OpenAI request failed: %s", exc)
             return None
 
     def _is_valid_action(self, observation: TriageObservation, action: TriageAction) -> bool:

@@ -40,7 +40,6 @@ class LLMConfig:
     temperature: float
     max_tokens: int
     timeout_seconds: float
-    provider: str  # 'openai' (default) or compatibility modes
 
 
 @dataclass(frozen=True)
@@ -53,22 +52,15 @@ class RuntimeConfig:
 
 
 def get_llm_config() -> LLMConfig:
-    provider = os.getenv("TRIAGE_LLM_PROVIDER", "openai").lower()
-
-    # Prioritize validator-injected variables (API_KEY, API_BASE_URL) over local config
-    api_key = (
-        os.getenv("API_KEY", "").strip()
-        or os.getenv("OPENAI_API_KEY", "").strip()
-        or os.getenv("GROQ_API_KEY", "").strip()
-    ) or None
+    # OpenAI-only mode: prefer validator-injected API_KEY, then local OPENAI_API_KEY.
+    api_key = os.getenv("API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
+    api_key = api_key or None
     
     base_url = os.getenv("API_BASE_URL", "").strip() or None
     model = os.getenv("TRIAGE_LLM_MODEL", "gpt-4.1-mini")
-    
-    # Set provider-specific defaults only if base_url not injected
-    if not base_url and provider != "openai":
-        base_url = os.getenv("TRIAGE_LLM_BASE_URL", "https://api.groq.com/openai/v1")
-    elif not base_url:
+
+    # Optional local override when API_BASE_URL is not injected.
+    if not base_url:
         base_url = os.getenv("TRIAGE_LLM_BASE_URL")
 
     return LLMConfig(
@@ -78,7 +70,6 @@ def get_llm_config() -> LLMConfig:
         temperature=_env_float("TRIAGE_LLM_TEMPERATURE", 0.0),
         max_tokens=_env_int("TRIAGE_LLM_MAX_TOKENS", 200),
         timeout_seconds=_env_float("TRIAGE_LLM_TIMEOUT", 20.0),
-        provider=provider,
     )
 
 
