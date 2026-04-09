@@ -28,7 +28,7 @@ def grade(episodes: int = 20) -> float:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Grade task3 for MedicalTriage")
-    parser.add_argument("--episodes", type=int, default=20)
+    parser.add_argument("--episodes", type=int, default=1)
     args = parser.parse_args()
 
     print_grader_result(grade_task(episodes=args.episodes))

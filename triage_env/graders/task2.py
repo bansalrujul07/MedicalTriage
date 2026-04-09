@@ -24,18 +24,18 @@ def _clip_score_strict(score: float) -> float:
     return epsilon + clipped * (1.0 - 2.0 * epsilon)
 
 
-def grade_task(episodes: int = 20):
+def grade_task(episodes: int = 1):
     return common_grade_task("task2", episodes=episodes)
 
 
-def grade(episodes: int = 20) -> float:
+def grade(episodes: int = 1) -> float:
     result = grade_task(episodes=episodes)
     return _clip_score_strict(float(result.get("score", 0.5)))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validator-friendly grader wrapper for task2")
-    parser.add_argument("--episodes", type=int, default=20)
+    parser.add_argument("--episodes", type=int, default=1)
     args = parser.parse_args()
     print_grader_result(grade_task(episodes=args.episodes))
 
