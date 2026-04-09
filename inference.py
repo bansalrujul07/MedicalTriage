@@ -134,8 +134,6 @@ async def _run_task(env: TriageEnv, client: OpenAI, task_name: str) -> tuple[boo
     score = 0.0
     last_obs: Optional[TriageObservation] = None
 
-    log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
-
     result = await env.reset(task=task_name)
     last_obs = result.observation
 
@@ -173,32 +171,20 @@ async def _run_task(env: TriageEnv, client: OpenAI, task_name: str) -> tuple[boo
             done=done_val,
             error=error_val,
         )
-        history.append(
-            json.dumps(
-                {
-                    "step": step,
-                    "action": _action_to_str(action),
-                    "reward": round(reward_val, 2),
-                    "done": done_val,
-                }
-            )
-        )
+        history.append(f"step={step} action={_action_to_str(action)} reward={reward_val:.2f} done={str(done_val).lower()}")
 
         if done_val:
             break
 
     score = _compute_score(last_obs, rewards)
     success = score >= SUCCESS_SCORE_THRESHOLD
-    log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
     return success, steps_taken, score, rewards
 
 
 async def main() -> None:
-    if not HF_TOKEN:
-        raise SystemExit("HF_TOKEN is required")
+    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
 
-    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
     env: TriageEnv | None = None
     success = False
     steps_taken = 0
@@ -206,8 +192,15 @@ async def main() -> None:
     rewards: List[float] = []
 
     try:
+        if not HF_TOKEN:
+            raise RuntimeError("HF_TOKEN is required")
+
+        client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
         env, _ = await _connect_environment()
         success, steps_taken, score, rewards = await _run_task(env=env, client=client, task_name=TASK_NAME)
+    except Exception:
+        success = False
+        score = max(0.0, min(1.0, score))
 
     finally:
         if env is not None:
@@ -215,9 +208,8 @@ async def main() -> None:
                 await env.close()
             except Exception:
                 pass
-        # Always emit END exactly once, even if an exception happens before steps.
-        if steps_taken == 0:
-            log_end(success=success, steps=steps_taken, score=max(0.0, min(1.0, score)), rewards=rewards)
+        # Always emit END exactly once, including on exception paths.
+        log_end(success=success, steps=steps_taken, score=max(0.0, min(1.0, score)), rewards=rewards)
 
 
 if __name__ == "__main__":
