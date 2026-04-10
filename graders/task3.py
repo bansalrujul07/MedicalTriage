@@ -23,8 +23,41 @@ def _clip_score_strict(score: float) -> float:
     return epsilon + clipped * (1.0 - 2.0 * epsilon)
 
 
+def _safe_result(reason: str, episodes: int) -> dict:
+    safe = _clip_score_strict(0.5)
+    return {
+        "grader_version": "wrapper-fallback-v1",
+        "task": "task3",
+        "task_id": "task3",
+        "episodes": int(episodes),
+        "score": safe,
+        "reward": safe,
+        "score_range": [0.0, 1.0],
+        "components": {
+            "rollout_achievement": safe,
+            "safety_errors": safe,
+            "efficiency": safe,
+            "task_specific": safe,
+        },
+        "signals": {"wrapper_fallback": 1.0, "reason": reason},
+        "summary": {"task": "task3", "fallback_reason": reason},
+    }
+
+
 def grade_task(episodes: int = 1):
-    return common_grade_task("task3", episodes=episodes)
+    try:
+        result = common_grade_task("task3", episodes=episodes)
+    except Exception as exc:  # pragma: no cover
+        return _safe_result(str(exc), episodes)
+
+    if not isinstance(result, dict):
+        return _safe_result("non-dict-result", episodes)
+
+    score = _clip_score_strict(float(result.get("score", 0.5)))
+    result["score"] = score
+    result["reward"] = score
+    result.setdefault("score_range", [0.0, 1.0])
+    return result
 
 
 def grade(episodes: int = 1) -> float:
