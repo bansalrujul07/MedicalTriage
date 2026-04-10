@@ -108,7 +108,7 @@ def _fallback_grade(task_name: str, episodes: int, reason: str) -> dict[str, Any
         "task_id": task_name,
         "episodes": episodes,
         "score": safe_score,
-        "reward": safe_score,
+        "reward": 0.0,
         "score_range": [0.0, 1.0],
         "components": {
             "rollout_achievement": safe_score,
@@ -165,7 +165,7 @@ def _grade_task_impl(task_name: str, episodes: int) -> dict[str, Any]:
         "task_id": task_name,
         "episodes": episodes,
         "score": final_score,
-        "reward": final_score,
+        "reward": float(summary.get("avg_total_reward", 0.0)),
         "score_range": [0.0, 1.0],
         "components": {
             "rollout_achievement": components["rollout_achievement"],
