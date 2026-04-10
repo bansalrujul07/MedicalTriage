@@ -2,6 +2,9 @@ import json
 import os
 import random
 
+_SEVERITY_PRIORITY = {"critical": 0, "severe": 1, "moderate": 2, "mild": 3}
+_ACTION_TYPE_PRIORITY = {"allocate_ventilator": 0, "treat": 1, "wait": 2}
+
 try:
     from triage_env.agents.base_agent import BaseAgent
     from triage_env.models import TriageAction, TriageObservation
@@ -72,7 +75,18 @@ class RLAgent(BaseAgent):
         else:
             best_value = max(self.q_table[state_key][a] for a in actions)
             best_actions = [a for a in actions if self.q_table[state_key][a] == best_value]
-            action_type, patient_id = random.choice(best_actions)
+            # Severity-aware tie-breaking: prefer ventilating critical > treating critical > ...
+            patient_severity = {
+                p.id: p.severity for p in observation.patients if p.alive
+            }
+            def _tiebreak(act_tuple):
+                atype, pid = act_tuple
+                sev = patient_severity.get(pid, "mild") if pid != -1 else "mild"
+                return (
+                    _SEVERITY_PRIORITY.get(sev, 99),
+                    _ACTION_TYPE_PRIORITY.get(atype, 99),
+                )
+            action_type, patient_id = min(best_actions, key=_tiebreak)
 
         return TriageAction(action_type=action_type, patient_id=patient_id)
 

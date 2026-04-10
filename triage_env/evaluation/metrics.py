@@ -99,6 +99,7 @@ def compute_episode_metrics(final_observation, total_reward: float, action_count
         "avg_health_alive": float(avg_health_alive),
         "alive_count": len(alive_patients),
         "stabilized_count": len(stabilized_patients),
+        "stabilization_rate": stabilization_rate,
         "stabilization_threshold": stabilization_threshold,
         "deaths_by_severity": deaths_by_severity,
         "ventilator_utilization": resource_utilization["ventilators"],
