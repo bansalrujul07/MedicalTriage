@@ -32,12 +32,18 @@ from triage_env.server.triage_env_environment import TriageEnvironment
 from triage_env.models import TriageAction
 
 
+def _assert_step_reward_contract(value: float) -> None:
+    assert 0.0 < value < 1.0
+    assert value == round(value, 2)
+
+
 def test_step_increments_step_count():
     env = TriageEnvironment()
     env.reset()
 
     obs = env.step(TriageAction(action_type="wait", patient_id=-1))
     assert obs.step_count == 1
+    _assert_step_reward_contract(obs.reward)
 
 
 def test_treat_action_returns_observation():
@@ -46,4 +52,5 @@ def test_treat_action_returns_observation():
 
     obs = env.step(TriageAction(action_type="treat", patient_id=0))
     assert isinstance(obs.reward, float)
+    _assert_step_reward_contract(obs.reward)
     assert hasattr(obs, "patients")

@@ -40,6 +40,11 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, RedirectResponse
 
 try:
+    import gradio as gr
+except Exception:  # pragma: no cover
+    gr = None
+
+try:
     from ..models import TriageAction, TriageObservation
     from .triage_env_environment import TriageEnvironment
 except ModuleNotFoundError:
@@ -56,6 +61,17 @@ app = create_app(
     max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
 )
 
+if gr is not None:
+    try:
+        try:
+            from .gradio_ui import build_gradio_ui
+        except ModuleNotFoundError:
+            from server.gradio_ui import build_gradio_ui
+        app = gr.mount_gradio_app(app, build_gradio_ui(), path="/ui")
+    except Exception:
+        # Keep API serving even if Gradio UI mount fails.
+        pass
+
 
 def _has_route(path: str) -> bool:
     return any(getattr(route, "path", None) == path for route in app.routes)
@@ -63,13 +79,16 @@ def _has_route(path: str) -> bool:
 
 @app.get("/", include_in_schema=False)
 def root():
-    # On Spaces, users land on "/" first. Redirect to docs when available.
+    # On Spaces, users land on "/" first. Prefer Gradio UI, then docs.
+    if _has_route("/ui"):
+        return RedirectResponse(url="/ui")
     if _has_route("/docs"):
         return RedirectResponse(url="/docs")
     return {
         "message": "MedicalTriage API is running",
         "health": "/health",
         "openapi": "/openapi.json",
+        "ui": "/ui",
         "docs": "/docs",
     }
 
