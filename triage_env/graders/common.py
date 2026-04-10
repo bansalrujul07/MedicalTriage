@@ -26,7 +26,7 @@ from triage_env.server.triage_env_environment import TriageEnvironment
 from triage_env.tasks import TASK_CONFIGS, TASK_TARGETS
 
 GRADER_VERSION = "v2.3"
-SCORE_EPSILON = 1e-6
+SCORE_EPSILON = 1e-4
 CONFIGURE_ROOT_LOGGER = os.getenv("TRIAGE_GRADER_CONFIGURE_ROOT_LOGGER", "").strip().lower() in {
     "1", "true", "yes", "on",
 }
