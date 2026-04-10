@@ -11,8 +11,8 @@ from triage_env.models import TriageAction, TriageObservation
 # Required by challenge spec
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-# Use only the validator-injected proxy key to avoid bypassing proxy accounting.
-API_KEY = os.getenv("API_KEY", "").strip()
+# Use the required submission token name, but keep API_KEY compatibility for local runs.
+API_KEY = os.getenv("HF_TOKEN", os.getenv("API_KEY", "")).strip()
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "medicaltriage:latest").strip()
 
 # Environment/task controls
@@ -212,7 +212,7 @@ async def main() -> None:
 
     try:
         if not API_KEY:
-            raise RuntimeError("API_KEY is required")
+            raise RuntimeError("HF_TOKEN is required")
 
         client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
         try:
