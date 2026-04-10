@@ -28,11 +28,22 @@ def test_openenv_manifest_declares_three_enabled_tasks_with_graders() -> None:
     enabled = [t for t in tasks if t.get("enabled", False)]
     assert len(enabled) >= 3
 
+    top_level_graders = manifest.get("graders", {})
+    assert isinstance(top_level_graders, dict)
+    assert set(top_level_graders) >= {"task1", "task2", "task3"}
+
     for task in enabled:
         grader_path = task.get("grader")
         assert isinstance(grader_path, str) and grader_path.endswith(".py")
         resolved = repo_root / grader_path
         assert resolved.exists(), f"Missing grader file: {grader_path}"
+
+        grader_entries = task.get("graders", [])
+        assert isinstance(grader_entries, list) and grader_entries, f"Missing graders list for {task.get('id')}"
+        primary = grader_entries[0]
+        assert primary.get("type") == "python"
+        assert isinstance(primary.get("path"), str) and (repo_root / primary["path"]).exists()
+        assert isinstance(primary.get("command"), str) and primary["command"].startswith("python ")
 
 
 @pytest.mark.parametrize(
