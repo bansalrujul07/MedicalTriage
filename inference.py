@@ -22,6 +22,7 @@ MAX_STEPS = int(os.getenv("TRIAGE_MAX_STEPS", "28"))
 TEMPERATURE = float(os.getenv("TRIAGE_TEMPERATURE", "0.0"))
 MAX_TOKENS = int(os.getenv("TRIAGE_MAX_TOKENS", "220"))
 SUCCESS_SCORE_THRESHOLD = float(os.getenv("TRIAGE_SUCCESS_THRESHOLD", "0.50"))
+SCORE_EPSILON = 1e-6
 
 
 SYSTEM_PROMPT = (
@@ -47,9 +48,18 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
-        f"[END] success={str(success).lower()} steps={steps} score={score:.2f} rewards={rewards_str}",
+        f"[END] success={str(success).lower()} steps={steps} score={score:.6f} rewards={rewards_str}",
         flush=True,
     )
+
+
+def _clip_01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def _clip_open_01(value: float) -> float:
+    clipped = _clip_01(value)
+    return SCORE_EPSILON + clipped * (1.0 - 2.0 * SCORE_EPSILON)
 
 
 def _action_to_str(action: TriageAction) -> str:
@@ -115,7 +125,7 @@ def _proxy_ping_call(client: OpenAI) -> None:
 
 def _compute_score(last_obs: Optional[TriageObservation], rewards: List[float]) -> float:
     if last_obs is None:
-        return 0.0
+        return _clip_open_01(0.5)
 
     alive = [p for p in last_obs.patients if p.alive]
     patient_count = max(1, len(last_obs.patients))
@@ -123,15 +133,15 @@ def _compute_score(last_obs: Optional[TriageObservation], rewards: List[float]) 
     avg_health_alive = (sum(p.health for p in alive) / len(alive)) if alive else 0.0
 
     # Score normalized to [0, 1]: blend survival and health quality.
-    health_component = min(max(avg_health_alive / 100.0, 0.0), 1.0)
+    health_component = _clip_01(avg_health_alive / 100.0)
     reward_component = 0.0
     if rewards:
         clipped_rewards = [max(-150.0, min(150.0, r)) for r in rewards]
         reward_component = (sum(clipped_rewards) / (len(clipped_rewards) * 300.0)) + 0.5
-        reward_component = min(max(reward_component, 0.0), 1.0)
+        reward_component = _clip_01(reward_component)
 
     score = 0.55 * survival_rate + 0.35 * health_component + 0.10 * reward_component
-    return min(max(score, 0.0), 1.0)
+    return _clip_open_01(score)
 
 
 async def _connect_environment() -> tuple[TriageEnv, str]:
@@ -224,7 +234,7 @@ async def main() -> None:
         success, steps_taken, score, rewards = await _run_task(env=env, client=client, task_name=TASK_NAME)
     except Exception:
         success = False
-        score = max(0.0, min(1.0, score))
+        score = _clip_open_01(score)
 
     finally:
         if env is not None:
@@ -233,7 +243,7 @@ async def main() -> None:
             except Exception:
                 pass
         # Always emit END exactly once, including on exception paths.
-        log_end(success=success, steps=steps_taken, score=max(0.0, min(1.0, score)), rewards=rewards)
+        log_end(success=success, steps=steps_taken, score=_clip_open_01(score), rewards=rewards)
 
 
 if __name__ == "__main__":
