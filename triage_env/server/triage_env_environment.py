@@ -1,3 +1,4 @@
+import math
 from uuid import uuid4
 
 from openenv.core.env_server.interfaces import Environment
@@ -12,6 +13,7 @@ except ImportError:
 
 class TriageEnvironment(Environment):
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
+    STEP_REWARD_SCALE: float = 25.0
 
     def __init__(
         self,
@@ -253,6 +255,8 @@ class TriageEnvironment(Environment):
             reward += terminal_reward
             reward_breakdown["episode_terminal_reward"] = terminal_reward
 
+        raw_reward = reward
+        reward = self._normalize_step_reward(raw_reward)
         self._state.total_reward += reward
 
         components = {
@@ -274,7 +278,11 @@ class TriageEnvironment(Environment):
             reward=reward,
             reward_detail=TriageReward(value=float(reward), components=components, penalties=penalties),
             message=message,
-            metadata=self._build_metadata(reward_breakdown=reward_breakdown),
+            metadata=self._build_metadata(
+                reward_breakdown=reward_breakdown,
+                raw_reward=raw_reward,
+                normalized_reward=reward,
+            ),
         )
 
     @property
@@ -385,6 +393,16 @@ class TriageEnvironment(Environment):
 
         return terminal_reward, success_achieved
 
+    def _normalize_step_reward(self, raw_reward: float) -> float:
+        """Normalize raw reward to (0,1) and round to two decimals."""
+        if not math.isfinite(raw_reward):
+            raw_reward = 0.0
+
+        scaled = 0.5 + (0.5 * math.tanh(raw_reward / self.STEP_REWARD_SCALE))
+        rounded_cents = int(math.floor((scaled * 100.0) + 0.5))
+        bounded_cents = min(99, max(1, rounded_cents))
+        return bounded_cents / 100.0
+
     def _is_done(self) -> bool:
         if self._state.step_count >= self._state.max_steps:
             return True
@@ -398,12 +416,17 @@ class TriageEnvironment(Environment):
 
         return False
 
-    def _build_metadata(self, reward_breakdown: dict) -> dict:
+    def _build_metadata(
+        self,
+        reward_breakdown: dict,
+        raw_reward: float | None = None,
+        normalized_reward: float | None = None,
+    ) -> dict:
         alive_patients = [p for p in self._state.patients if p.alive]
         critical_patients = [p for p in self._state.patients if p.severity == "critical"]
         surviving_critical = [p for p in critical_patients if p.alive]
 
-        return {
+        metadata = {
             "episode_id": self._state.episode_id,
             "task": self.task_name,
             "total_reward": self._state.total_reward,
@@ -419,3 +442,10 @@ class TriageEnvironment(Environment):
             },
             "reward_breakdown": reward_breakdown,
         }
+
+        if raw_reward is not None:
+            metadata["raw_reward"] = float(raw_reward)
+        if normalized_reward is not None:
+            metadata["normalized_reward"] = float(normalized_reward)
+
+        return metadata
