@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import traceback
 from typing import Any
 
@@ -11,6 +12,19 @@ try:
 except ModuleNotFoundError:
     from models import TriageAction
     from server.triage_env_environment import TriageEnvironment
+
+
+_ENV_LOCK = threading.Lock()
+_ENV: TriageEnvironment | None = None
+
+
+def _ensure_env(task: str | None = None) -> TriageEnvironment:
+    global _ENV
+    if _ENV is None:
+        initial_task = task or "task2"
+        _ENV = TriageEnvironment(task=initial_task)
+        _ENV.reset(task=initial_task)
+    return _ENV
 
 
 def _obs_payload(env: TriageEnvironment, observation: Any) -> dict[str, Any]:
@@ -32,8 +46,6 @@ def build_gradio_ui() -> gr.Blocks:
     with gr.Blocks(title="Medical Triage") as demo:
         gr.Markdown("## Medical Triage\nSimple controls for reset, step, and getState.")
 
-        env_state = gr.State(value=None)
-
         with gr.Row():
             task = gr.Dropdown(
                 choices=["task1", "task2", "task3"],
@@ -54,53 +66,50 @@ def build_gradio_ui() -> gr.Blocks:
 
         output = gr.JSON(label="Response")
 
-        def ensure_env(current_env: TriageEnvironment | None) -> TriageEnvironment:
-            if current_env is None:
-                current_env = TriageEnvironment(task="task2")
-                current_env.reset(task="task2")
-            return current_env
-
-        def on_reset(selected_task: str, current_env: TriageEnvironment | None):
-            env = ensure_env(current_env)
+        def on_reset(selected_task: str):
             try:
-                obs = env.reset(task=selected_task)
-                return env, _obs_payload(env, obs)
+                with _ENV_LOCK:
+                    env = _ensure_env(selected_task)
+                    obs = env.reset(task=selected_task)
+                    return _obs_payload(env, obs)
             except Exception as exc:
-                return env, {"error": str(exc), "traceback": traceback.format_exc()}
+                return {"error": str(exc), "traceback": traceback.format_exc()}
 
         def on_step(
             selected_task: str,
             selected_action: str,
             selected_patient_id: float,
-            current_env: TriageEnvironment | None,
         ):
-            env = ensure_env(current_env)
             try:
-                if env.task_name != selected_task:
-                    env.reset(task=selected_task)
+                with _ENV_LOCK:
+                    env = _ensure_env(selected_task)
+                    if env.task_name != selected_task:
+                        env.reset(task=selected_task)
 
-                pid = -1 if selected_action == "wait" else int(selected_patient_id)
-                action = TriageAction(action_type=selected_action, patient_id=pid)
-                obs = env.step(action)
-                return env, _obs_payload(env, obs)
+                    pid = -1 if selected_action == "wait" else int(selected_patient_id or 0)
+                    action = TriageAction(action_type=selected_action, patient_id=pid)
+                    obs = env.step(action)
+                    return _obs_payload(env, obs)
             except Exception as exc:
-                return env, {"error": str(exc), "traceback": traceback.format_exc()}
+                return {"error": str(exc), "traceback": traceback.format_exc()}
 
-        def on_get_state(current_env: TriageEnvironment | None):
-            env = ensure_env(current_env)
+        def on_get_state():
             try:
-                return env, _state_payload(env)
+                with _ENV_LOCK:
+                    env = _ensure_env("task2")
+                    return _state_payload(env)
             except Exception as exc:
-                return env, {"error": str(exc), "traceback": traceback.format_exc()}
+                return {"error": str(exc), "traceback": traceback.format_exc()}
 
-        reset_btn.click(on_reset, inputs=[task, env_state], outputs=[env_state, output])
+        reset_btn.click(on_reset, inputs=[task], outputs=[output], queue=False)
         step_btn.click(
             on_step,
-            inputs=[task, action_type, patient_id, env_state],
-            outputs=[env_state, output],
+            inputs=[task, action_type, patient_id],
+            outputs=[output],
+            queue=False,
         )
-        get_state_btn.click(on_get_state, inputs=[env_state], outputs=[env_state, output])
+        get_state_btn.click(on_get_state, inputs=[], outputs=[output], queue=False)
 
-        demo.load(on_get_state, inputs=[env_state], outputs=[env_state, output])
+        demo.load(on_get_state, inputs=[], outputs=[output], queue=False)
 
     return demo

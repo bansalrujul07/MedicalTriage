@@ -44,6 +44,9 @@ try:
 except Exception:  # pragma: no cover
     gr = None
 
+GRADIO_PATH = "/gradio"
+_GRADIO_MOUNT_ERROR: str | None = None
+
 try:
     from ..models import TriageAction, TriageObservation
     from .triage_env_environment import TriageEnvironment
@@ -67,30 +70,54 @@ if gr is not None:
             from .gradio_ui import build_gradio_ui
         except ModuleNotFoundError:
             from server.gradio_ui import build_gradio_ui
-        app = gr.mount_gradio_app(app, build_gradio_ui(), path="/ui")
-    except Exception:
-        # Keep API serving even if Gradio UI mount fails.
-        pass
+        app = gr.mount_gradio_app(app, build_gradio_ui(), path=GRADIO_PATH)
+    except Exception as exc:
+        # Keep API serving even if Gradio UI mount fails, but retain error for diagnostics.
+        _GRADIO_MOUNT_ERROR = f"{type(exc).__name__}: {exc}"
 
 
 def _has_route(path: str) -> bool:
     return any(getattr(route, "path", None) == path for route in app.routes)
 
 
+def _has_route_variant(path: str) -> bool:
+    return _has_route(path) or _has_route(f"{path}/")
+
+
 @app.get("/", include_in_schema=False)
 def root():
     # On Spaces, users land on "/" first. Prefer Gradio UI, then docs.
-    if _has_route("/ui"):
-        return RedirectResponse(url="/ui")
+    if _has_route_variant(GRADIO_PATH):
+        return RedirectResponse(url=GRADIO_PATH)
     if _has_route("/docs"):
         return RedirectResponse(url="/docs")
-    return {
+    payload = {
         "message": "MedicalTriage API is running",
         "health": "/health",
         "openapi": "/openapi.json",
-        "ui": "/ui",
+        "ui": GRADIO_PATH,
         "docs": "/docs",
     }
+    if _GRADIO_MOUNT_ERROR is not None:
+        payload["gradio_mount_error"] = _GRADIO_MOUNT_ERROR
+    return payload
+
+
+if not _has_route("/ui"):
+
+    @app.get("/ui", include_in_schema=False)
+    def ui_redirect():
+        if _has_route_variant(GRADIO_PATH):
+            return RedirectResponse(url=GRADIO_PATH)
+        if _has_route("/docs"):
+            return RedirectResponse(url="/docs")
+        return JSONResponse(
+            {
+                "message": "Gradio UI is unavailable",
+                "gradio_mount_error": _GRADIO_MOUNT_ERROR,
+            },
+            status_code=503,
+        )
 
 
 if not _has_route("/openapi.json"):
