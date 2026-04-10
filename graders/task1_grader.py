@@ -11,7 +11,7 @@ for p in (str(REPO_ROOT),):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from triage_env.graders.common import grade_task, print_grader_result
+from triage_env.graders.common import grade_task, print_grader_result  # noqa: E402
 
 
 def main() -> None:
