@@ -1,8 +1,8 @@
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+  PYTHONUNBUFFERED=1 \
+  PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
@@ -14,7 +14,6 @@ RUN python -m pip install --upgrade pip && pip install -r /app/requirements.txt
 COPY triage_env /app/triage_env
 COPY README.md /app/README.md
 COPY openenv.yaml /app/openenv.yaml
-COPY graders /app/graders
 COPY server /app/server
 COPY pyproject.toml /app/pyproject.toml
 COPY uv.lock /app/uv.lock
