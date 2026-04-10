@@ -14,7 +14,7 @@ if str(REPO_ROOT) not in sys.path:
 
 def _clip_score_strict(score: float) -> float:
     """Clip score to strictly (0, 1) range."""
-    epsilon = 0.001
+    epsilon = 1e-6
     clipped = max(0.0, min(1.0, float(score)))
     return epsilon + clipped * (1.0 - 2.0 * epsilon)
 

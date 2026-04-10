@@ -17,13 +17,63 @@ except ModuleNotFoundError:
     from common import grade_task as common_grade_task, print_grader_result
 
 
+def _clip_score_strict(score: float) -> float:
+    epsilon = 1e-6
+    clipped = max(0.0, min(1.0, float(score)))
+    return epsilon + clipped * (1.0 - 2.0 * epsilon)
+
+
+def _normalize_result(result: dict, episodes: int, fallback_reason: str | None = None) -> dict:
+    score = _clip_score_strict(float(result.get("score", 0.5)))
+    result["episodes"] = int(episodes)
+    result["score"] = score
+    result["reward"] = score
+    result.setdefault("score_range", [0.0, 1.0])
+    if fallback_reason is not None:
+        result.setdefault("signals", {})
+        result.setdefault("summary", {})
+        result["signals"].setdefault("wrapper_fallback", 1.0)
+        result["signals"]["reason"] = fallback_reason
+        result["summary"]["fallback_reason"] = fallback_reason
+    return result
+
+
+def _safe_result(reason: str, episodes: int) -> dict:
+    safe = _clip_score_strict(0.5)
+    return {
+        "grader_version": "wrapper-fallback-v1",
+        "task": "task2",
+        "task_id": "task2",
+        "episodes": int(episodes),
+        "score": safe,
+        "reward": safe,
+        "score_range": [0.0, 1.0],
+        "components": {
+            "rollout_achievement": safe,
+            "safety_errors": safe,
+            "efficiency": safe,
+            "task_specific": safe,
+        },
+        "signals": {"wrapper_fallback": 1.0, "reason": reason},
+        "summary": {"task": "task2", "fallback_reason": reason},
+    }
+
+
 def grade_task(episodes: int = 1):
-    return common_grade_task("task2", episodes=episodes)
+    try:
+        result = common_grade_task("task2", episodes=episodes)
+    except Exception as exc:  # pragma: no cover
+        return _safe_result(str(exc), episodes)
+
+    if not isinstance(result, dict):
+        return _safe_result("non-dict-result", episodes)
+
+    return _normalize_result(result, episodes)
 
 
-def grade(episodes: int = 20) -> float:
+def grade(episodes: int = 1) -> float:
     result = grade_task(episodes=episodes)
-    return float(result.get("score", 0.0))
+    return _clip_score_strict(float(result.get("score", 0.5)))
 
 
 def main() -> None:

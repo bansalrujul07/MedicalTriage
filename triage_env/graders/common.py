@@ -27,7 +27,7 @@ from triage_env.server.triage_env_environment import TriageEnvironment
 from triage_env.tasks import TASK_CONFIGS, TASK_TARGETS
 
 GRADER_VERSION = "v2.2"  # Updated version
-SCORE_EPSILON = 0.001
+SCORE_EPSILON = 1e-6
 GRADE_TIMEOUT_SECONDS = float(os.getenv("TRIAGE_GRADE_TIMEOUT_SECONDS", "300"))
 CONFIGURE_ROOT_LOGGER = os.getenv("TRIAGE_GRADER_CONFIGURE_ROOT_LOGGER", "").strip().lower() in {
     "1",
