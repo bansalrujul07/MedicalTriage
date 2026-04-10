@@ -4,7 +4,6 @@ import json
 import math
 import logging
 import os
-import multiprocessing as mp
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -26,14 +25,10 @@ from triage_env.evaluation.evaluator import evaluate_agent
 from triage_env.server.triage_env_environment import TriageEnvironment
 from triage_env.tasks import TASK_CONFIGS, TASK_TARGETS
 
-GRADER_VERSION = "v2.2"  # Updated version
+GRADER_VERSION = "v2.3"
 SCORE_EPSILON = 1e-6
-GRADE_TIMEOUT_SECONDS = float(os.getenv("TRIAGE_GRADE_TIMEOUT_SECONDS", "300"))
 CONFIGURE_ROOT_LOGGER = os.getenv("TRIAGE_GRADER_CONFIGURE_ROOT_LOGGER", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
+    "1", "true", "yes", "on",
 }
 
 LOGGER = logging.getLogger(__name__)
@@ -94,7 +89,6 @@ class SafeAgent(BaseAgent):
 
 def _safe_wait_action():
     from triage_env.models import TriageAction
-
     return TriageAction(action_type="wait", patient_id=-1)
 
 
@@ -153,6 +147,7 @@ def _grade_task_impl(task_name: str, episodes: int) -> dict[str, Any]:
     task_config = TASK_CONFIGS[task_name]
     agent, agent_meta = _build_evaluated_agent(task_name)
     agent = SafeAgent(agent)
+    
     summary, _ = evaluate_agent(
         env_class=TriageEnvironment,
         agent=agent,
@@ -193,36 +188,20 @@ def _grade_task_impl(task_name: str, episodes: int) -> dict[str, Any]:
     }
 
 
-def _grade_task_worker(task_name: str, episodes: int, result_queue):
-    try:
-        result_queue.put(_validate_result_schema(_grade_task_impl(task_name, episodes)))
-    except Exception as exc:  # pragma: no cover
-        err = {
-            "type": type(exc).__name__,
-            "message": str(exc),
-            "traceback": "",
-        }
-        result_queue.put(_fallback_grade(task_name, episodes, json.dumps(err, ensure_ascii=True)))
-
-
 def _build_evaluated_agent(task_name: str):
     package_root = Path(__file__).resolve().parents[1]
 
-    # ✅ FIX 2: Use 'or' logic to be more robust (audit: 'stricter than before')
     injected_api_key = os.getenv("API_KEY", "").strip()
     injected_base_url = os.getenv("API_BASE_URL", "").strip()
     proxy_env_detected = bool(injected_api_key or injected_base_url)
 
     requested = os.getenv("TRIAGE_GRADER_AGENT", "").strip().lower()
     if not requested:
-        # If validator injects proxy credentials, force LLMAgent so API calls are observed.
         if proxy_env_detected:
             from triage_env.agents.llm_agent import LLMAgent
             from triage_env.config import get_llm_config
 
             llm_config = get_llm_config()
-            
-            # Create a new config instance instead of mutating the frozen dataclass.
             llm_config = replace(
                 llm_config,
                 api_key=injected_api_key or llm_config.api_key,
@@ -259,7 +238,6 @@ def _build_evaluated_agent(task_name: str):
             agent = TrainedQAgent(str(q_path))
             return agent, {"selected_agent": "TrainedQAgent", "checkpoint": str(q_path)}
 
-        # Fallback to LLMAgent to use the validator's LLM proxy if available
         from triage_env.agents.llm_agent import LLMAgent
         from triage_env.config import get_llm_config
         
@@ -442,39 +420,15 @@ def _compute_final_score(components: dict[str, float]) -> float:
     return _clip_open_01(score)
 
 
+# FIX: Removed multiprocessing. Running synchronously prevents platform hangs and "Not enough tasks" errors.
 def grade_task(task_name: str, episodes: int = 1) -> dict[str, Any]:
-    ctx = mp.get_context("spawn")
-    result_queue = ctx.Queue(maxsize=1)
-    process = ctx.Process(target=_grade_task_worker, args=(task_name, episodes, result_queue), daemon=True)
-
     try:
-        process.start()
-        process.join(timeout=GRADE_TIMEOUT_SECONDS)
-
-        if process.is_alive():
-            LOGGER.error("Grader timed out after %.1f seconds for task %s", GRADE_TIMEOUT_SECONDS, task_name)
-            process.terminate()
-            process.join(timeout=5)
-            return _fallback_grade(task_name, episodes, f"timeout:{GRADE_TIMEOUT_SECONDS}")
-
-        if result_queue.empty():
-            return _fallback_grade(task_name, episodes, "no-result-from-worker")
-
-        result = result_queue.get_nowait()
+        # Execute evaluation synchronously.
+        result = _grade_task_impl(task_name, episodes)
         return _validate_result_schema(result)
-
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:
         LOGGER.exception("Unexpected grader failure for task %s", task_name)
         return _fallback_grade(task_name, episodes, f"{type(exc).__name__}:{exc}")
-    finally:
-        try:
-            result_queue.close()
-        except Exception:
-            pass
-        try:
-            result_queue.join_thread()
-        except Exception:
-            pass
 
 
 def print_grader_result(result: dict[str, Any]) -> None:
