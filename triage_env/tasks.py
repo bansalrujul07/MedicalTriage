@@ -232,16 +232,19 @@ TASK_TRAINING_DEFAULTS: dict[str, dict[str, float | int]] = {
         "episodes": 200,
         "epsilon_start": 0.20,
         "epsilon_end": 0.05,
+        "learning_rate": 0.20,
     },
     "task2": {
         "episodes": 500,
         "epsilon_start": 0.20,
         "epsilon_end": 0.05,
+        "learning_rate": 0.20,
     },
     "task3": {
-        "episodes": 2000,
-        "epsilon_start": 0.30,
+        "episodes": 3000,
+        "epsilon_start": 0.40,
         "epsilon_end": 0.05,
+        "learning_rate": 0.25,
     },
 }
 

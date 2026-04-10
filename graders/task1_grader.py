@@ -17,7 +17,7 @@ from triage_env.graders.common import grade_task, print_grader_result  # noqa: E
 def main() -> None:
     parser = argparse.ArgumentParser(description="Grade task1 for MedicalTriage")
     parser.add_argument("--episodes", type=int, default=3)
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     print_grader_result(grade_task("task1", episodes=args.episodes))
 

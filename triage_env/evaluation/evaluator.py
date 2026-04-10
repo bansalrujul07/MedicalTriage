@@ -103,6 +103,7 @@ def evaluate_agent(env_class, agent, task="task2", num_episodes=20, seed=42, ver
         "critical_survival_rate": mean(r.terminal_diagnostics["critical_survival_rate"] for r in episode_results),
         "avg_health_alive": mean(r.terminal_diagnostics["avg_health_alive"] for r in episode_results),
         "alive_count": mean(r.terminal_diagnostics["alive_count"] for r in episode_results),
+        "stabilization_rate": mean(r.terminal_diagnostics["stabilization_rate"] for r in episode_results),
         "ventilator_utilization": mean(r.terminal_diagnostics["ventilator_utilization"] for r in episode_results),
         "ventilator_occupancy": mean(r.terminal_diagnostics["ventilator_occupancy"] for r in episode_results),
     }

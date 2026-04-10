@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +27,7 @@ from triage_env.server.triage_env_environment import TriageEnvironment
 from triage_env.tasks import TASK_CONFIGS, TASK_TARGETS
 
 GRADER_VERSION = "v2.3"
-SCORE_EPSILON = 1e-4
+SCORE_EPSILON = 1e-6
 CONFIGURE_ROOT_LOGGER = os.getenv("TRIAGE_GRADER_CONFIGURE_ROOT_LOGGER", "").strip().lower() in {
     "1", "true", "yes", "on",
 }
@@ -119,6 +120,7 @@ def _fallback_grade(task_name: str, episodes: int, reason: str) -> dict[str, Any
         "signals": {
             "fallback": 1.0,
             "error": reason,
+            "grader_timestamp": datetime.now(timezone.utc).isoformat(),
         },
         "summary": {
             "task": task_name,
@@ -183,6 +185,7 @@ def _grade_task_impl(task_name: str, episodes: int) -> dict[str, Any]:
             "reward_norm": components["reward_norm"],
             "invalid_rate": components["invalid_rate"],
             "stabilization_threshold": components["stabilization_threshold"],
+            "grader_timestamp": datetime.now(timezone.utc).isoformat(),
         },
         "summary": summary,
     }
