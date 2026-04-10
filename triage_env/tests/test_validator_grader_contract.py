@@ -5,9 +5,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-import graders.task1_grader as root_task1_module
-import graders.task2_grader as root_task2_module
-import graders.task3_grader as root_task3_module
+import triage_env.graders.common as graders_common
+import triage_env.graders.task1_grader as root_task1_module
+import triage_env.graders.task2_grader as root_task2_module
+import triage_env.graders.task3_grader as root_task3_module
 
 
 def _is_strict_open_unit_interval(value: float) -> bool:
@@ -34,34 +35,45 @@ def test_openenv_manifest_declares_three_enabled_tasks_with_graders() -> None:
         assert resolved.exists(), f"Missing grader file: {grader_path}"
 
 
-def test_wrapper_grade_stays_strictly_between_zero_and_one(monkeypatch) -> None:
-    monkeypatch.setattr(root_task1_module, "common_grade_task", lambda *_args, **_kwargs: {"score": 0.0})
-    monkeypatch.setattr(root_task2_module, "common_grade_task", lambda *_args, **_kwargs: {"score": 1.0})
-    monkeypatch.setattr(root_task3_module, "common_grade_task", lambda *_args, **_kwargs: {})
+@pytest.mark.parametrize(
+    ("components", "expected"),
+    [
+        (
+            {
+                "rollout_achievement": 0.0,
+                "safety_errors": 0.0,
+                "efficiency": 0.0,
+                "task_specific": 0.0,
+            },
+            1e-6,
+        ),
+        (
+            {
+                "rollout_achievement": 1.0,
+                "safety_errors": 1.0,
+                "efficiency": 1.0,
+                "task_specific": 1.0,
+            },
+            1.0 - 1e-6,
+        ),
+    ],
+)
+def test_compute_final_score_clamps_exact_zero_and_one(components, expected) -> None:
+    score = graders_common._compute_final_score(components)
 
-    s1 = root_task1_module.grade(episodes=1)
-    s2 = root_task2_module.grade(episodes=1)
-    s3 = root_task3_module.grade(episodes=1)
-
-    assert _is_strict_open_unit_interval(s1)
-    assert _is_strict_open_unit_interval(s2)
-    assert _is_strict_open_unit_interval(s3)
+    _assert_epsilon_clamp(score, expected)
+    assert _is_strict_open_unit_interval(score)
 
 
 @pytest.mark.parametrize(
-    ("module", "raw_score", "expected"),
-    [
-        (root_task1_module, 0.0, 1e-6),
-        (root_task2_module, 1.0, 1.0 - 1e-6),
-        (root_task3_module, 0.0, 1e-6),
-    ],
+    "value",
+    [0.0, 1.0],
 )
-def test_grade_task_clamps_exact_zero_and_one(monkeypatch, module, raw_score, expected) -> None:
-    monkeypatch.setattr(module, "common_grade_task", lambda *_args, **_kwargs: {"score": raw_score})
+def test_clip_open_interval_bounds(value: float) -> None:
+    clipped = graders_common._clip_open_01(value)
 
-    result = module.grade_task(episodes=1)
-
-    assert result["episodes"] == 1
-    _assert_epsilon_clamp(result["score"], expected)
-    _assert_epsilon_clamp(result["reward"], expected)
-    assert _is_strict_open_unit_interval(result["score"])
+    if value == 0.0:
+        _assert_epsilon_clamp(clipped, 1e-6)
+    else:
+        _assert_epsilon_clamp(clipped, 1.0 - 1e-6)
+    assert _is_strict_open_unit_interval(clipped)

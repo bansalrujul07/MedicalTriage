@@ -13,7 +13,7 @@ for p in (str(HERE), str(PKG_ROOT), str(REPO_ROOT)):
         sys.path.insert(0, p)
 
 try:
-    from graders.common import grade_task, print_grader_result
+    from triage_env.graders.common import grade_task, print_grader_result
 except ModuleNotFoundError:
     from common import grade_task, print_grader_result
 

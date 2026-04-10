@@ -2,10 +2,10 @@ import inspect
 import re
 from pathlib import Path
 
-from graders.common import grade_task as common_grade_task
-from graders.task1_grader import grade_task as task1_grade_task
-from graders.task2_grader import grade_task as task2_grade_task
-from graders.task3_grader import grade_task as task3_grade_task
+from triage_env.graders.common import grade_task as common_grade_task
+from triage_env.graders.task1_grader import grade_task as task1_grade_task
+from triage_env.graders.task2_grader import grade_task as task2_grade_task
+from triage_env.graders.task3_grader import grade_task as task3_grade_task
 
 
 def _default_episodes(func) -> int:
