@@ -16,14 +16,29 @@ tasks:
     name: Baseline triage
     enabled: true
     grader: graders/task1_grader.py
+    graders:
+      - type: python
+        name: default
+        path: graders/task1_grader.py
+        command: python graders/task1_grader.py
   - id: task2
     name: Moderate pressure triage
     enabled: true
     grader: graders/task2_grader.py
+    graders:
+      - type: python
+        name: default
+        path: graders/task2_grader.py
+        command: python graders/task2_grader.py
   - id: task3
     name: High pressure triage
     enabled: true
     grader: graders/task3_grader.py
+    graders:
+      - type: python
+        name: default
+        path: graders/task3_grader.py
+        command: python graders/task3_grader.py
 
 tags:
   - openenv
