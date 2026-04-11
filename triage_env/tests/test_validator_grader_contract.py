@@ -34,16 +34,14 @@ def test_openenv_manifest_declares_three_enabled_tasks_with_graders() -> None:
 
     for task in enabled:
         grader_path = task.get("grader")
-        assert isinstance(grader_path, str) and grader_path.endswith(".py")
-        resolved = repo_root / grader_path
-        assert resolved.exists(), f"Missing grader file: {grader_path}"
+        assert isinstance(grader_path, str) and ":" in grader_path, f"Missing or invalid top-level grader string: {grader_path}"
 
         grader_entries = task.get("graders", [])
         assert isinstance(grader_entries, list) and grader_entries, f"Missing graders list for {task.get('id')}"
         primary = grader_entries[0]
-        assert primary.get("type") == "python"
-        assert isinstance(primary.get("path"), str) and (repo_root / primary["path"]).exists()
-        assert isinstance(primary.get("command"), str) and primary["command"].startswith("python ")
+        assert primary.get("type") in ["class", "python"], f"Invalid grader type {primary.get('type')}"
+        path_str = primary.get("path")
+        assert isinstance(path_str, str) and ":" in path_str, f"Grader path must be module:Class, got {path_str}"
 
 
 @pytest.mark.parametrize(

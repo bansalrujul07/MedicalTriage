@@ -22,5 +22,22 @@ def main() -> None:
     print_grader_result(grade_task("task1", episodes=args.episodes))
 
 
+class Task1Grader:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __call__(self, *args, **kwargs):
+        return grade_task("task1", episodes=3)
+
+    def grade(self, *args, **kwargs):
+        return grade_task("task1", episodes=3)
+
+    def evaluate(self, *args, **kwargs):
+        return grade_task("task1", episodes=3)
+
+    def run(self, *args, **kwargs):
+        return grade_task("task1", episodes=3)
+
+
 if __name__ == "__main__":
     main()
